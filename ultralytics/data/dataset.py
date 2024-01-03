@@ -12,8 +12,10 @@ import torchvision
 from ultralytics.utils import LOCAL_RANK, NUM_THREADS, TQDM, colorstr, is_dir_writeable
 
 from .augment import Compose, Format, Instances, LetterBox, classify_albumentations, classify_transforms, v8_transforms
+from .augment import MultiPolygonFormat
 from .base import BaseDataset
 from .utils import HELP_URL, LOGGER, get_hash, img2label_paths, verify_image, verify_image_label
+from .utils import verify_image_label_multipolygon
 
 # Ultralytics dataset *.cache version, >= 1.0.0 for YOLOv8
 DATASET_CACHE_VERSION = '1.0.3'
@@ -40,7 +42,7 @@ class YOLODataset(BaseDataset):
         assert not (self.use_segments and self.use_keypoints), 'Can not use both segments and keypoints.'
         super().__init__(*args, **kwargs)
 
-    def cache_labels(self, path=Path('./labels.cache')):
+    def cache_labels(self, path=Path('./labels.cache'), func=verify_image_label):
         """
         Cache dataset labels, check images and read shapes.
 
@@ -58,7 +60,7 @@ class YOLODataset(BaseDataset):
             raise ValueError("'kpt_shape' in data.yaml missing or incorrect. Should be a list with [number of "
                              "keypoints, number of dims (2 for x,y or 3 for x,y,visible)], i.e. 'kpt_shape: [17, 3]'")
         with ThreadPool(NUM_THREADS) as pool:
-            results = pool.imap(func=verify_image_label,
+            results = pool.imap(func=func,
                                 iterable=zip(self.im_files, self.label_files, repeat(self.prefix),
                                              repeat(self.use_keypoints), repeat(len(self.data['names'])), repeat(nkpt),
                                              repeat(ndim)))
@@ -338,3 +340,31 @@ class SemanticDataset(BaseDataset):
     def __init__(self):
         """Initialize a SemanticDataset object."""
         super().__init__()
+
+
+class MultiPolygonDataset(YOLODataset):
+    def __init__(self, *args, data=None, **kwargs):
+        super().__init__(*args, data=data, use_segments=True, use_keypoints=False, **kwargs)
+
+    def cache_labels(self, path=Path('./labels.cache')):
+        super().cache_labels(path=path, func=verify_image_label_multipolygon)
+
+    def build_transforms(self, hyp=None):
+        if self.augment:
+            hyp.mosaic = hyp.mosaic if self.augment and not self.rect else 0.0
+            hyp.mixup = hyp.mixup if self.augment and not self.rect else 0.0
+            transforms = v8_transforms(self, self.imgsz, hyp)
+        else:
+            transforms = Compose([LetterBox(new_shape=(self.imgsz, self.imgsz), scaleup=False)])
+        transforms.append(
+            MultiPolygonFormat(
+                bbox_format='xywh',
+                normalize=True,
+                return_mask=self.use_segments,
+                return_keypoint=self.use_keypoints,
+                batch_idx=True,
+                mask_ratio=hyp.mask_ratio,
+                mask_overlap=hyp.overlap_mask
+            )
+        )
+        return transforms

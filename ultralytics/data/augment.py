@@ -16,6 +16,7 @@ from ultralytics.utils.metrics import bbox_ioa
 from ultralytics.utils.ops import segment2box
 
 from .utils import polygons2masks, polygons2masks_overlap
+from .utils import mpolygons2masks, mpolygons2masks_overlap
 
 
 # TODO: we might need a BaseTransform to make all these augments be compatible with both classification and semantic
@@ -1140,3 +1141,17 @@ class ToTensor:
         im = im.half() if self.half else im.float()  # uint8 to fp16/32
         im /= 255.0  # 0-255 to 0.0-1.0
         return im
+
+
+class MultiPolygonFormat(Format):
+    def _format_segments(self, instances, cls, w, h):
+        """Convert polygon points to bitmap."""
+        segments = instances.segments
+        if self.mask_overlap:
+            masks, sorted_idx = mpolygons2masks_overlap((h, w), segments, downsample_ratio=self.mask_ratio)
+            masks = masks[None]  # (640, 640) -> (1, 640, 640)
+            instances = instances[sorted_idx]
+            cls = cls[sorted_idx]
+        else:
+            masks = mpolygons2masks((h, w), segments, downsample_ratio=self.mask_ratio)
+        return masks, instances, cls
