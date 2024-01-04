@@ -15,8 +15,7 @@ from ultralytics.data.utils import IMG_FORMATS, VID_FORMATS
 from ultralytics.utils import RANK, colorstr
 from ultralytics.utils.checks import check_file
 
-from .dataset import YOLODataset
-from .dataset import MultiPolygonDataset
+from .dataset import YOLODataset, MultiPolygonDataset
 from .utils import PIN_MEMORY
 
 

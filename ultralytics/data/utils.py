@@ -29,10 +29,10 @@ VID_FORMATS = 'asf', 'avi', 'gif', 'm4v', 'mkv', 'mov', 'mp4', 'mpeg', 'mpg', 't
 PIN_MEMORY = str(os.getenv('PIN_MEMORY', True)).lower() == 'true'  # global pin_memory for dataloaders
 
 
-def img2label_paths(img_paths):
+def img2label_paths(img_paths, label_ext='.txt'):
     """Define label paths as a function of image paths."""
     sa, sb = f'{os.sep}images{os.sep}', f'{os.sep}labels{os.sep}'  # /images/, /labels/ substrings
-    return [sb.join(x.rsplit(sa, 1)).rsplit('.', 1)[0] + '.txt' for x in img_paths]
+    return [sb.join(x.rsplit(sa, 1)).rsplit('.', 1)[0] + label_ext for x in img_paths]
 
 
 def get_hash(paths):
@@ -152,9 +152,9 @@ def verify_image_label(args):
         return [None, None, None, None, None, nm, nf, ne, nc, msg]
 
 
-def verify_image_label_multipolygon(args):
+def verify_image_label_mpolygon(args):
     """Verify one image-label pair."""
-    im_file, lb_file, prefix, _, num_cls, _, _ = args
+    im_file, lb_file, prefix, num_cls = args
     # Number (missing, found, empty, corrupt), message, segments, keypoints
     nm, nf, ne, nc, msg, segments = 0, 0, 0, 0, '', []
     try:
@@ -221,11 +221,11 @@ def verify_image_label_multipolygon(args):
             nm = 1  # label missing
             lb = np.zeros((0, 5), dtype=np.float32)
         lb = lb[:, :5]
-        return im_file, lb, shape, segments, None, nm, nf, ne, nc, msg
+        return im_file, lb, shape, segments, nm, nf, ne, nc, msg
     except Exception as e:
         nc = 1
         msg = f'{prefix}WARNING ⚠️ {im_file}: ignoring corrupt image/label: {e}'
-        return [None, None, None, None, None, nm, nf, ne, nc, msg]
+        return [None, None, None, None, nm, nf, ne, nc, msg]
 
 
 def polygon2mask(imgsz, polygons, color=1, downsample_ratio=1):

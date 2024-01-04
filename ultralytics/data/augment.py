@@ -15,8 +15,7 @@ from ultralytics.utils.instance import Instances
 from ultralytics.utils.metrics import bbox_ioa
 from ultralytics.utils.ops import segment2box
 
-from .utils import polygons2masks, polygons2masks_overlap
-from .utils import mpolygons2masks, mpolygons2masks_overlap
+from .utils import polygons2masks, polygons2masks_overlap, mpolygons2masks, mpolygons2masks_overlap
 
 
 # TODO: we might need a BaseTransform to make all these augments be compatible with both classification and semantic
