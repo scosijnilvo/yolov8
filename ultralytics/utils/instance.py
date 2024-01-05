@@ -415,3 +415,93 @@ class Instances:
     def bboxes(self):
         """Return bounding boxes."""
         return self._bboxes.bboxes
+
+
+class MultiSegmentInstances(Instances):
+    def __init__(self, bboxes, segments=None, keypoints=None, bbox_format='xywh', normalized=True):
+        self._bboxes = Bboxes(bboxes=bboxes, format=bbox_format)
+        self.keypoints = keypoints
+        self.normalized = normalized
+        # TODO resample segments
+        self.segments = segments
+
+    def __getitem__(self, index) -> 'MultiSegmentInstances':
+        segments = self.segments[index] if len(self.segments) else self.segments
+        keypoints = self.keypoints[index] if self.keypoints is not None else None
+        bboxes = self.bboxes[index]
+        bbox_format = self._bboxes.format
+        return MultiSegmentInstances(
+            bboxes=bboxes,
+            segments=segments,
+            keypoints=keypoints,
+            bbox_format=bbox_format,
+            normalized=self.normalized,
+        )
+
+    def scale(self, scale_w, scale_h, bbox_only=False):
+        self._bboxes.mul(scale=(scale_w, scale_h, scale_w, scale_h))
+        if bbox_only:
+            return
+        for i, subsegments in enumerate(self.segments):
+            for j, subsegment in enumerate(subsegments):
+                self.segments[i][j] = [[p[0] * scale_w, p[1] * scale_h] for p in subsegment]
+
+    def denormalize(self, w, h):
+        if not self.normalized:
+            return
+        self._bboxes.mul(scale=(w, h, w, h))
+        for i, subsegments in enumerate(self.segments):
+            for j, subsegment in enumerate(subsegments):
+                self.segments[i][j] = [[p[0] * w, p[1] * h] for p in subsegment]
+        self.normalized = False
+
+    def normalize(self, w, h):
+        if self.normalized:
+            return
+        self._bboxes.mul(scale=(1 / w, 1 / h, 1 / w, 1 / h))
+        for i, subsegments in enumerate(self.segments):
+            for j, subsegment in enumerate(subsegments):
+                self.segments[i][j] = [[p[0] / w, p[1] / h] for p in subsegment]
+        self.normalized = True
+        
+    def add_padding(self, padw, padh):
+        assert not self.normalized, 'you should add padding with absolute coordinates.'
+        self._bboxes.add(offset=(padw, padh, padw, padh))
+        for i, subsegments in enumerate(self.segments):
+            for j, subsegment in enumerate(subsegments):
+                self.segments[i][j] = [[p[0] + padw, p[1] + padh] for p in subsegment]
+
+    def flipud(self, h):
+        if self._bboxes.format == 'xyxy':
+            y1 = self.bboxes[:, 1].copy()
+            y2 = self.bboxes[:, 3].copy()
+            self.bboxes[:, 1] = h - y2
+            self.bboxes[:, 3] = h - y1
+        else:
+            self.bboxes[:, 1] = h - self.bboxes[:, 1]
+        for i, subsegments in enumerate(self.segments):
+            for j, subsegment in enumerate(subsegments):
+                self.segments[i][j] = [[p[0], h - p[1]] for p in subsegment]
+    
+    def fliplr(self, w):
+        if self._bboxes.format == 'xyxy':
+            x1 = self.bboxes[:, 0].copy()
+            x2 = self.bboxes[:, 2].copy()
+            self.bboxes[:, 0] = w - x2
+            self.bboxes[:, 2] = w - x1
+        else:
+            self.bboxes[:, 0] = w - self.bboxes[:, 0]
+        for i, subsegments in enumerate(self.segments):
+            for j, subsegment in enumerate(subsegments):
+                self.segments[i][j] = [[w - p[0], p[1]] for p in subsegment]
+
+    def clip(self, w, h):
+        ori_format = self._bboxes.format
+        self.convert_bbox(format='xyxy')
+        self.bboxes[:, [0, 2]] = self.bboxes[:, [0, 2]].clip(0, w)
+        self.bboxes[:, [1, 3]] = self.bboxes[:, [1, 3]].clip(0, h)
+        if ori_format != 'xyxy':
+            self.convert_bbox(format=ori_format)
+        for i, subsegments in enumerate(self.segments):
+            for j, subsegment in enumerate(subsegments):
+                self.segments[i][j] = [[p[0].clip(0, w), p[1].clip(0, h)] for p in subsegment]

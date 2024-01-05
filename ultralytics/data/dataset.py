@@ -10,6 +10,7 @@ import torch
 import torchvision
 
 from ultralytics.utils import LOCAL_RANK, NUM_THREADS, TQDM, colorstr, is_dir_writeable
+from ultralytics.utils.instance import MultiSegmentInstances
 
 from .augment import Compose, Format, MultiPolygonFormat, Instances, LetterBox, classify_albumentations, classify_transforms, v8_transforms
 from .base import BaseDataset
@@ -434,12 +435,14 @@ class MultiPolygonDataset(YOLODataset):
         return labels
 
     def build_transforms(self, hyp=None):
-        if self.augment:
-            hyp.mosaic = hyp.mosaic if self.augment and not self.rect else 0.0
-            hyp.mixup = hyp.mixup if self.augment and not self.rect else 0.0
-            transforms = v8_transforms(self, self.imgsz, hyp)
-        else:
-            transforms = Compose([LetterBox(new_shape=(self.imgsz, self.imgsz), scaleup=False)])
+        #if self.augment:
+        #    # TODO implement augmentation
+        #    hyp.mosaic = hyp.mosaic if self.augment and not self.rect else 0.0
+        #    hyp.mixup = hyp.mixup if self.augment and not self.rect else 0.0
+        #    transforms = v8_transforms(self, self.imgsz, hyp)
+        #else:
+        #    transforms = Compose([LetterBox(new_shape=(self.imgsz, self.imgsz), scaleup=False)])
+        transforms = Compose([LetterBox(new_shape=(self.imgsz, self.imgsz), scaleup=False)])
         transforms.append(
             MultiPolygonFormat(
                 bbox_format='xywh',
@@ -452,3 +455,13 @@ class MultiPolygonDataset(YOLODataset):
             )
         )
         return transforms
+
+    def update_labels_info(self, label):
+        """Custom label format."""
+        bboxes = label.pop('bboxes')
+        segments = label.pop('segments')
+        label.pop('keypoints', None)
+        bbox_format = label.pop('bbox_format')
+        normalized = label.pop('normalized')
+        label['instances'] = MultiSegmentInstances(bboxes, segments, bbox_format=bbox_format, normalized=normalized)
+        return label

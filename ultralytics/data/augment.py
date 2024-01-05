@@ -1147,6 +1147,7 @@ class MultiPolygonFormat(Format):
         """Convert polygon points to bitmap."""
         segments = instances.segments
         if self.mask_overlap:
+            # TODO implement overlapping masks
             masks, sorted_idx = mpolygons2masks_overlap((h, w), segments, downsample_ratio=self.mask_ratio)
             masks = masks[None]  # (640, 640) -> (1, 640, 640)
             instances = instances[sorted_idx]
