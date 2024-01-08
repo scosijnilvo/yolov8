@@ -10,9 +10,9 @@ import torch
 import torchvision
 
 from ultralytics.utils import LOCAL_RANK, NUM_THREADS, TQDM, colorstr, is_dir_writeable
-from ultralytics.utils.instance import MultiSegmentInstances
+from ultralytics.utils.instance import MultiPolygonInstances
 
-from .augment import Compose, Format, MultiPolygonFormat, Instances, LetterBox, classify_albumentations, classify_transforms, v8_transforms
+from .augment import Compose, Format, MultiPolygonFormat, Instances, LetterBox, classify_albumentations, classify_transforms, v8_transforms, v8_transforms_multipolygon
 from .base import BaseDataset
 from .utils import HELP_URL, LOGGER, get_hash, img2label_paths, verify_image, verify_image_label, verify_image_label_mpolygon
 
@@ -435,14 +435,12 @@ class MultiPolygonDataset(YOLODataset):
         return labels
 
     def build_transforms(self, hyp=None):
-        #if self.augment:
-        #    # TODO implement augmentation
-        #    hyp.mosaic = hyp.mosaic if self.augment and not self.rect else 0.0
-        #    hyp.mixup = hyp.mixup if self.augment and not self.rect else 0.0
-        #    transforms = v8_transforms(self, self.imgsz, hyp)
-        #else:
-        #    transforms = Compose([LetterBox(new_shape=(self.imgsz, self.imgsz), scaleup=False)])
-        transforms = Compose([LetterBox(new_shape=(self.imgsz, self.imgsz), scaleup=False)])
+        if self.augment:
+            hyp.mosaic = hyp.mosaic if self.augment and not self.rect else 0.0
+            hyp.mixup = hyp.mixup if self.augment and not self.rect else 0.0
+            transforms = v8_transforms_multipolygon(self, self.imgsz, hyp)
+        else:
+            transforms = Compose([LetterBox(new_shape=(self.imgsz, self.imgsz), scaleup=False)])
         transforms.append(
             MultiPolygonFormat(
                 bbox_format='xywh',
@@ -463,5 +461,5 @@ class MultiPolygonDataset(YOLODataset):
         label.pop('keypoints', None)
         bbox_format = label.pop('bbox_format')
         normalized = label.pop('normalized')
-        label['instances'] = MultiSegmentInstances(bboxes, segments, bbox_format=bbox_format, normalized=normalized)
+        label['instances'] = MultiPolygonInstances(bboxes, segments, bbox_format=bbox_format, normalized=normalized)
         return label

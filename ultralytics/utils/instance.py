@@ -402,6 +402,7 @@ class Instances:
         if len(instances_list) == 1:
             return instances_list[0]
 
+        cls = instances_list[0].__class__
         use_keypoint = instances_list[0].keypoints is not None
         bbox_format = instances_list[0]._bboxes.format
         normalized = instances_list[0].normalized
@@ -417,28 +418,96 @@ class Instances:
         return self._bboxes.bboxes
 
 
-class MultiSegmentInstances(Instances):
+class MultiPolygonInstances(Instances):
+    """
+    Container for bounding boxes and multi polygon segments of detected objects in an image.
+
+    # TODO
+    Attributes:
+        _bboxes (Bboxes): Internal object for handling bounding box operations.
+        segments (ndarray): Segments array with shape [N, 1000, 2] after resampling.
+        keypoints (ndarray): keypoints(x, y, visible) with shape [N, 17, 3]. Default is None.
+        normalized (bool): Flag indicating whether the bounding box coordinates are normalized.
+    """
+
     def __init__(self, bboxes, segments=None, keypoints=None, bbox_format='xywh', normalized=True):
+        """
+        # TODO
+        Args:
+            bboxes (ndarray): bboxes with shape [N, 4].
+            segments (list | ndarray): segments.
+            keypoints (ndarray): keypoints(x, y, visible) with shape [N, 17, 3].
+            bbox_format (str, optional): The format of bounding boxes ('xywh' or 'xyxy'). Default is 'xywh'.
+            normalized (bool, optional): Whether the bounding box coordinates are normalized. Default is True.
+        """
         self._bboxes = Bboxes(bboxes=bboxes, format=bbox_format)
+        if segments is None:
+            segments = [[]]
         self.keypoints = keypoints
         self.normalized = normalized
-        # TODO resample segments
+        for i, subsegments in enumerate(segments):
+            if len(subsegments) > 0:
+                for j, s in enumerate(subsegments):
+                    s = np.concatenate((s, s[0:1]), axis=0)
+                    x = np.linspace(0, len(s) - 1, 1000)
+                    xp = np.arange(len(s))
+                    segments[i][j] = np.concatenate([np.interp(x, xp, s[:, idx]) for idx in range(2)],
+                                                    dtype=np.float32).reshape(2, -1).T
+            else:
+                segments[i] = np.zeros((0, 1000, 2), dtype=np.float32)
         self.segments = segments
 
-    def __getitem__(self, index) -> 'MultiSegmentInstances':
+    def __getitem__(self, index) -> 'MultiPolygonInstances':
+        """
+        Retrieve a specific instance or a set of instances using indexing.
+
+        Args:
+            index (int, slice, or np.ndarray): The index, slice, or boolean array to select
+                                               the desired instances.
+
+        Returns:
+            MultiPolygonInstances: A new MultiPolygonInstances object containing the selected bounding boxes and segments.
+
+        Note:
+            When using boolean indexing, make sure to provide a boolean array with the same
+            length as the number of instances.
+        """
         segments = self.segments[index] if len(self.segments) else self.segments
-        keypoints = self.keypoints[index] if self.keypoints is not None else None
         bboxes = self.bboxes[index]
         bbox_format = self._bboxes.format
-        return MultiSegmentInstances(
+        return MultiPolygonInstances(
             bboxes=bboxes,
             segments=segments,
-            keypoints=keypoints,
             bbox_format=bbox_format,
             normalized=self.normalized,
         )
 
+    #@classmethod
+    #def concatenate(cls, instances_list: List['MultiPolygonInstances'], axis=0) -> 'MultiPolygonInstances':
+    #    """
+    #    Concatenates a list of MultiPolygonInstances objects into a single MultiPolygonInstances object.
+
+    #    Args:
+    #        instances_list (List[MultiPolygonInstances]): A list of MultiPolygonInstances objects to concatenate.
+    #        axis (int, optional): The axis along which the arrays will be concatenated. Defaults to 0.
+
+    #    Returns:
+    #        MultiPolygonInstances: A new MultiPolygonInstances object containing the concatenated bounding boxes and segments.
+    #    """
+    #    assert isinstance(instances_list, (list, tuple))
+    #    if not instances_list:
+    #        return cls(np.empty(0))
+    #    assert all(isinstance(instance, MultiPolygonInstances) for instance in instances_list)
+    #    if len(instances_list) == 1:
+    #        return instances_list[0]
+    #    bbox_format = instances_list[0]._bboxes.format
+    #    normalized = instances_list[0].normalized
+    #    cat_boxes = np.concatenate([ins.bboxes for ins in instances_list], axis=axis)
+    #    cat_segments = np.concatenate([b.segments for b in instances_list], axis=axis)
+    #    return cls(bboxes=cat_boxes, segments=cat_segments, bbox_format=bbox_format, normalized=normalized)
+
     def scale(self, scale_w, scale_h, bbox_only=False):
+        """This might be similar with denormalize func but without normalized sign."""
         self._bboxes.mul(scale=(scale_w, scale_h, scale_w, scale_h))
         if bbox_only:
             return
@@ -447,6 +516,7 @@ class MultiSegmentInstances(Instances):
                 self.segments[i][j] = [[p[0] * scale_w, p[1] * scale_h] for p in subsegment]
 
     def denormalize(self, w, h):
+        """Denormalizes boxes and segments from normalized coordinates."""
         if not self.normalized:
             return
         self._bboxes.mul(scale=(w, h, w, h))
@@ -456,6 +526,7 @@ class MultiSegmentInstances(Instances):
         self.normalized = False
 
     def normalize(self, w, h):
+        """Normalize boxes and segments to image dimensions."""
         if self.normalized:
             return
         self._bboxes.mul(scale=(1 / w, 1 / h, 1 / w, 1 / h))
@@ -465,6 +536,7 @@ class MultiSegmentInstances(Instances):
         self.normalized = True
         
     def add_padding(self, padw, padh):
+        """Handle rect and mosaic situation."""
         assert not self.normalized, 'you should add padding with absolute coordinates.'
         self._bboxes.add(offset=(padw, padh, padw, padh))
         for i, subsegments in enumerate(self.segments):
@@ -472,6 +544,7 @@ class MultiSegmentInstances(Instances):
                 self.segments[i][j] = [[p[0] + padw, p[1] + padh] for p in subsegment]
 
     def flipud(self, h):
+        """Flips the coordinates of bounding boxes and segments vertically."""
         if self._bboxes.format == 'xyxy':
             y1 = self.bboxes[:, 1].copy()
             y2 = self.bboxes[:, 3].copy()
@@ -484,6 +557,7 @@ class MultiSegmentInstances(Instances):
                 self.segments[i][j] = [[p[0], h - p[1]] for p in subsegment]
     
     def fliplr(self, w):
+        """Flips the coordinates of bounding boxes and segments horizontally."""
         if self._bboxes.format == 'xyxy':
             x1 = self.bboxes[:, 0].copy()
             x2 = self.bboxes[:, 2].copy()
@@ -496,6 +570,7 @@ class MultiSegmentInstances(Instances):
                 self.segments[i][j] = [[w - p[0], p[1]] for p in subsegment]
 
     def clip(self, w, h):
+        """Clips bounding boxes and segments to stay within image boundaries."""
         ori_format = self._bboxes.format
         self.convert_bbox(format='xyxy')
         self.bboxes[:, [0, 2]] = self.bboxes[:, [0, 2]].clip(0, w)
