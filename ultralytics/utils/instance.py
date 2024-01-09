@@ -408,6 +408,13 @@ class Instances:
         normalized = instances_list[0].normalized
 
         cat_boxes = np.concatenate([ins.bboxes for ins in instances_list], axis=axis)
+        # TODO move to MultiPolygonInstances
+        #if cls == MultiPolygonInstances:
+        #    cat_segments = []
+        #    for b in instances_list:
+        #        for s in b.segments:
+        #            cat_segments.append(s)
+        #else:
         cat_segments = np.concatenate([b.segments for b in instances_list], axis=axis)
         cat_keypoints = np.concatenate([b.keypoints for b in instances_list], axis=axis) if use_keypoint else None
         return cls(cat_boxes, cat_segments, cat_keypoints, bbox_format, normalized)
@@ -481,30 +488,6 @@ class MultiPolygonInstances(Instances):
             bbox_format=bbox_format,
             normalized=self.normalized,
         )
-
-    #@classmethod
-    #def concatenate(cls, instances_list: List['MultiPolygonInstances'], axis=0) -> 'MultiPolygonInstances':
-    #    """
-    #    Concatenates a list of MultiPolygonInstances objects into a single MultiPolygonInstances object.
-
-    #    Args:
-    #        instances_list (List[MultiPolygonInstances]): A list of MultiPolygonInstances objects to concatenate.
-    #        axis (int, optional): The axis along which the arrays will be concatenated. Defaults to 0.
-
-    #    Returns:
-    #        MultiPolygonInstances: A new MultiPolygonInstances object containing the concatenated bounding boxes and segments.
-    #    """
-    #    assert isinstance(instances_list, (list, tuple))
-    #    if not instances_list:
-    #        return cls(np.empty(0))
-    #    assert all(isinstance(instance, MultiPolygonInstances) for instance in instances_list)
-    #    if len(instances_list) == 1:
-    #        return instances_list[0]
-    #    bbox_format = instances_list[0]._bboxes.format
-    #    normalized = instances_list[0].normalized
-    #    cat_boxes = np.concatenate([ins.bboxes for ins in instances_list], axis=axis)
-    #    cat_segments = np.concatenate([b.segments for b in instances_list], axis=axis)
-    #    return cls(bboxes=cat_boxes, segments=cat_segments, bbox_format=bbox_format, normalized=normalized)
 
     def scale(self, scale_w, scale_h, bbox_only=False):
         """This might be similar with denormalize func but without normalized sign."""
@@ -580,3 +563,20 @@ class MultiPolygonInstances(Instances):
         for i, subsegments in enumerate(self.segments):
             for j, subsegment in enumerate(subsegments):
                 self.segments[i][j] = [[p[0].clip(0, w), p[1].clip(0, h)] for p in subsegment]
+
+    def remove_zero_area_boxes(self):
+        """
+        Remove zero-area boxes, i.e. after clipping some boxes may have zero width or height.
+
+        This removes them.
+        """
+        good = self.bbox_areas > 0
+        if not all(good):
+            self._bboxes = self._bboxes[good]
+            if len(self.segments):
+                good_segments = []
+                for i, v in enumerate(good):
+                    if v:
+                        good_segments.append(self.segments[i])
+                self.segments = good_segments
+        return good
