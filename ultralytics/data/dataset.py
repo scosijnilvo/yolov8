@@ -14,7 +14,7 @@ from ultralytics.utils.instance import MultiPolygonInstances
 
 from .augment import Compose, Format, MultiPolygonFormat, Instances, LetterBox, classify_albumentations, classify_transforms, v8_transforms, v8_transforms_multipolygon
 from .base import BaseDataset
-from .utils import HELP_URL, LOGGER, get_hash, img2label_paths, verify_image, verify_image_label, verify_image_label_mpolygon
+from .utils import HELP_URL, LOGGER, get_hash, img2label_paths, verify_image, verify_image_label, verify_image_label_mpolygon, verify_image_label_with_weight
 
 # Ultralytics dataset *.cache version, >= 1.0.0 for YOLOv8
 DATASET_CACHE_VERSION = '1.0.3'
@@ -435,12 +435,13 @@ class MultiPolygonDataset(YOLODataset):
         return labels
 
     def build_transforms(self, hyp=None):
-        if self.augment:
-            hyp.mosaic = hyp.mosaic if self.augment and not self.rect else 0.0
-            hyp.mixup = hyp.mixup if self.augment and not self.rect else 0.0
-            transforms = v8_transforms_multipolygon(self, self.imgsz, hyp)
-        else:
-            transforms = Compose([LetterBox(new_shape=(self.imgsz, self.imgsz), scaleup=False)])
+        # TODO fix augmentation for multi polygons
+        #if self.augment:
+        #    hyp.mosaic = hyp.mosaic if self.augment and not self.rect else 0.0
+        #    hyp.mixup = hyp.mixup if self.augment and not self.rect else 0.0
+        #    transforms = v8_transforms_multipolygon(self, self.imgsz, hyp)
+        #else:
+        transforms = Compose([LetterBox(new_shape=(self.imgsz, self.imgsz), scaleup=False)])
         transforms.append(
             MultiPolygonFormat(
                 bbox_format='xywh',
@@ -463,3 +464,59 @@ class MultiPolygonDataset(YOLODataset):
         normalized = label.pop('normalized')
         label['instances'] = MultiPolygonInstances(bboxes, segments, bbox_format=bbox_format, normalized=normalized)
         return label
+
+
+class WeightDataset(YOLODataset):
+    def cache_labels(self, path=Path('./labels.cache')):
+        """
+        Cache dataset labels, check images and read shapes.
+
+        Args:
+            path (Path): path where to save the cache file (default: Path('./labels.cache')).
+        Returns:
+            (dict): labels.
+        """
+        x = {'labels': []}
+        nm, nf, ne, nc, msgs = 0, 0, 0, 0, []  # number missing, found, empty, corrupt, messages
+        desc = f'{self.prefix}Scanning {path.parent / path.stem}...'
+        total = len(self.im_files)
+        nkpt, ndim = self.data.get('kpt_shape', (0, 0))
+        if self.use_keypoints and (nkpt <= 0 or ndim not in (2, 3)):
+            raise ValueError("'kpt_shape' in data.yaml missing or incorrect. Should be a list with [number of "
+                             "keypoints, number of dims (2 for x,y or 3 for x,y,visible)], i.e. 'kpt_shape: [17, 3]'")
+        with ThreadPool(NUM_THREADS) as pool:
+            results = pool.imap(func=verify_image_label_with_weight,
+                                iterable=zip(self.im_files, self.label_files, repeat(self.prefix),
+                                             repeat(self.use_keypoints), repeat(len(self.data['names'])), repeat(nkpt),
+                                             repeat(ndim)))
+            pbar = TQDM(results, desc=desc, total=total)
+            for im_file, lb, shape, weights, segments, keypoint, nm_f, nf_f, ne_f, nc_f, msg in pbar:
+                nm += nm_f
+                nf += nf_f
+                ne += ne_f
+                nc += nc_f
+                if im_file:
+                    x['labels'].append(
+                        dict(
+                            im_file=im_file,
+                            shape=shape,
+                            cls=lb[:, 0:1],  # n, 1
+                            bboxes=lb[:, 1:],  # n, 4
+                            weights=weights,
+                            segments=segments,
+                            keypoints=keypoint,
+                            normalized=True,
+                            bbox_format='xywh'))
+                if msg:
+                    msgs.append(msg)
+                pbar.desc = f'{desc} {nf} images, {nm + ne} backgrounds, {nc} corrupt'
+            pbar.close()
+        if msgs:
+            LOGGER.info('\n'.join(msgs))
+        if nf == 0:
+            LOGGER.warning(f'{self.prefix}WARNING ⚠️ No labels found in {path}. {HELP_URL}')
+        x['hash'] = get_hash(self.label_files + self.im_files)
+        x['results'] = nf, nm, ne, nc, len(self.im_files)
+        x['msgs'] = msgs  # warnings
+        save_dataset_cache_file(self.prefix, path, x)
+        return x
