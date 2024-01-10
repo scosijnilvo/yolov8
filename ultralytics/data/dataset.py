@@ -12,7 +12,7 @@ import torchvision
 from ultralytics.utils import LOCAL_RANK, NUM_THREADS, TQDM, colorstr, is_dir_writeable
 from ultralytics.utils.instance import MultiPolygonInstances
 
-from .augment import Compose, Format, MultiPolygonFormat, Instances, LetterBox, classify_albumentations, classify_transforms, v8_transforms, v8_transforms_multipolygon
+from .augment import Compose, Format, Instances, LetterBox, classify_transforms, v8_transforms, MultiPolygonFormat, v8_transforms_multipolygon
 from .base import BaseDataset
 from .utils import HELP_URL, LOGGER, get_hash, img2label_paths, verify_image, verify_image_label, verify_image_label_mpolygon, verify_image_label_with_weight
 
