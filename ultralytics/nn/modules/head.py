@@ -438,6 +438,7 @@ class RTDETRDecoder(nn.Module):
         for layer in self.input_proj:
             xavier_uniform_(layer[0].weight)
 
+
 class WeightSegment(Segment):
     def __init__(self, nc=80, nm=32, npr=256, ch=()):
         super().__init__(nc, nm, npr, ch)

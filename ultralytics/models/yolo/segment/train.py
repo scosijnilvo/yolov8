@@ -65,6 +65,6 @@ class SegmentationTrainer(yolo.detect.DetectionTrainer):
 
 
 class MultiPolygonSegmentationTrainer(SegmentationTrainer):
-    def build_dataset(self, img_path, mode='train', batch=None):
+    def build_dataset(self, img_path, mode="train", batch=None):
         gs = max(int(de_parallel(self.model).stride.max() if self.model else 0), 32)
-        return build_mpolygon_dataset(self.args, img_path, batch, self.data, mode=mode, rect=mode == 'val', stride=gs)
+        return build_mpolygon_dataset(self.args, img_path, batch, self.data, mode=mode, rect=mode == "val", stride=gs)

@@ -399,12 +399,12 @@ class Instances:
 
         cat_boxes = np.concatenate([ins.bboxes for ins in instances_list], axis=axis)
         # TODO move to MultiPolygonInstances
-        #if cls == MultiPolygonInstances:
+        # if cls == MultiPolygonInstances:
         #    cat_segments = []
         #    for b in instances_list:
         #        for s in b.segments:
         #            cat_segments.append(s)
-        #else:
+        # else:
         cat_segments = np.concatenate([b.segments for b in instances_list], axis=axis)
         cat_keypoints = np.concatenate([b.keypoints for b in instances_list], axis=axis) if use_keypoint else None
         return cls(cat_boxes, cat_segments, cat_keypoints, bbox_format, normalized)
@@ -427,7 +427,7 @@ class MultiPolygonInstances(Instances):
         normalized (bool): Flag indicating whether the bounding box coordinates are normalized.
     """
 
-    def __init__(self, bboxes, segments=None, keypoints=None, bbox_format='xywh', normalized=True):
+    def __init__(self, bboxes, segments=None, keypoints=None, bbox_format="xywh", normalized=True):
         """
         # TODO
         Args:
@@ -448,13 +448,16 @@ class MultiPolygonInstances(Instances):
                     s = np.concatenate((s, s[0:1]), axis=0)
                     x = np.linspace(0, len(s) - 1, 1000)
                     xp = np.arange(len(s))
-                    segments[i][j] = np.concatenate([np.interp(x, xp, s[:, idx]) for idx in range(2)],
-                                                    dtype=np.float32).reshape(2, -1).T
+                    segments[i][j] = (
+                        np.concatenate([np.interp(x, xp, s[:, idx]) for idx in range(2)], dtype=np.float32)
+                        .reshape(2, -1)
+                        .T
+                    )
             else:
                 segments[i] = np.zeros((0, 1000, 2), dtype=np.float32)
         self.segments = segments
 
-    def __getitem__(self, index) -> 'MultiPolygonInstances':
+    def __getitem__(self, index) -> "MultiPolygonInstances":
         """
         Retrieve a specific instance or a set of instances using indexing.
 
@@ -507,10 +510,10 @@ class MultiPolygonInstances(Instances):
             for j, subsegment in enumerate(subsegments):
                 self.segments[i][j] = [[p[0] / w, p[1] / h] for p in subsegment]
         self.normalized = True
-        
+
     def add_padding(self, padw, padh):
         """Handle rect and mosaic situation."""
-        assert not self.normalized, 'you should add padding with absolute coordinates.'
+        assert not self.normalized, "you should add padding with absolute coordinates."
         self._bboxes.add(offset=(padw, padh, padw, padh))
         for i, subsegments in enumerate(self.segments):
             for j, subsegment in enumerate(subsegments):
@@ -518,7 +521,7 @@ class MultiPolygonInstances(Instances):
 
     def flipud(self, h):
         """Flips the coordinates of bounding boxes and segments vertically."""
-        if self._bboxes.format == 'xyxy':
+        if self._bboxes.format == "xyxy":
             y1 = self.bboxes[:, 1].copy()
             y2 = self.bboxes[:, 3].copy()
             self.bboxes[:, 1] = h - y2
@@ -528,10 +531,10 @@ class MultiPolygonInstances(Instances):
         for i, subsegments in enumerate(self.segments):
             for j, subsegment in enumerate(subsegments):
                 self.segments[i][j] = [[p[0], h - p[1]] for p in subsegment]
-    
+
     def fliplr(self, w):
         """Flips the coordinates of bounding boxes and segments horizontally."""
-        if self._bboxes.format == 'xyxy':
+        if self._bboxes.format == "xyxy":
             x1 = self.bboxes[:, 0].copy()
             x2 = self.bboxes[:, 2].copy()
             self.bboxes[:, 0] = w - x2
@@ -545,10 +548,10 @@ class MultiPolygonInstances(Instances):
     def clip(self, w, h):
         """Clips bounding boxes and segments to stay within image boundaries."""
         ori_format = self._bboxes.format
-        self.convert_bbox(format='xyxy')
+        self.convert_bbox(format="xyxy")
         self.bboxes[:, [0, 2]] = self.bboxes[:, [0, 2]].clip(0, w)
         self.bboxes[:, [1, 3]] = self.bboxes[:, [1, 3]].clip(0, h)
-        if ori_format != 'xyxy':
+        if ori_format != "xyxy":
             self.convert_bbox(format=ori_format)
         for i, subsegments in enumerate(self.segments):
             for j, subsegment in enumerate(subsegments):
