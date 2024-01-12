@@ -763,8 +763,8 @@ def verify_image_label_mpolygon(args):
 def verify_image_label_with_weight(args):
     """Verify one image-label pair."""
     im_file, lb_file, prefix, keypoint, num_cls, nkpt, ndim = args
-    # Number (missing, found, empty, corrupt), message, weight, segments, keypoints
-    nm, nf, ne, nc, msg, weight, segments, keypoints = 0, 0, 0, 0, "", 0, [], None
+    # Number (missing, found, empty, corrupt), message, weights, segments, keypoints
+    nm, nf, ne, nc, msg, weights, segments, keypoints = 0, 0, 0, 0, "", 0, [], None
     try:
         # Verify images
         im = Image.open(im_file)
@@ -792,7 +792,9 @@ def verify_image_label_with_weight(args):
                 elif keypoint:
                     keypoints = [np.array(x[2:], dtype=np.float32) for x in lb]
                     lb = np.concatenate((classes.reshape(-1, 1), keypoints), 1)
-                lb = np.array(lb, dtype=np.float32)
+                else:
+                    lb = np.array(lb, dtype=np.float32)
+                    lb = np.concatenate((lb[:, 0].reshape(-1, 1), lb[:, 2:]), 1)
             nl = len(lb)
             if nl:
                 if keypoint:

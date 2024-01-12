@@ -6,7 +6,7 @@ from ultralytics.models import yolo
 from ultralytics.nn.tasks import SegmentationModel
 from ultralytics.utils import DEFAULT_CFG, RANK
 from ultralytics.utils.plotting import plot_images, plot_results
-from ultralytics.data import build_mpolygon_dataset
+from ultralytics.data import build_mpolygon_dataset, build_weight_dataset
 from ultralytics.utils.torch_utils import de_parallel
 
 
@@ -68,3 +68,9 @@ class MultiPolygonSegmentationTrainer(SegmentationTrainer):
     def build_dataset(self, img_path, mode="train", batch=None):
         gs = max(int(de_parallel(self.model).stride.max() if self.model else 0), 32)
         return build_mpolygon_dataset(self.args, img_path, batch, self.data, mode=mode, rect=mode == "val", stride=gs)
+
+
+class WeightSegmentationTrainer(SegmentationTrainer):
+    def build_dataset(self, img_path, mode="train", batch=None):
+        gs = max(int(de_parallel(self.model).stride.max() if self.model else 0), 32)
+        return build_weight_dataset(self.args, img_path, batch, self.data, mode=mode, rect=mode == "val", stride=gs)

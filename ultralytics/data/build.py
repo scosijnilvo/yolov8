@@ -23,7 +23,7 @@ from ultralytics.data.utils import IMG_FORMATS, VID_FORMATS
 from ultralytics.utils import RANK, colorstr
 from ultralytics.utils.checks import check_file
 
-from .dataset import YOLODataset, MultiPolygonDataset
+from .dataset import YOLODataset, MultiPolygonDataset, WeightDataset
 from .utils import PIN_MEMORY
 
 
@@ -98,25 +98,6 @@ def build_yolo_dataset(cfg, img_path, batch, data, mode="train", rect=False, str
         pad=0.0 if mode == "train" else 0.5,
         prefix=colorstr(f"{mode}: "),
         task=cfg.task,
-        classes=cfg.classes,
-        data=data,
-        fraction=cfg.fraction if mode == "train" else 1.0,
-    )
-
-
-def build_mpolygon_dataset(cfg, img_path, batch, data, mode="train", rect=False, stride=32):
-    return MultiPolygonDataset(
-        img_path=img_path,
-        imgsz=cfg.imgsz,
-        batch_size=batch,
-        augment=mode == "train",  # augmentation
-        hyp=cfg,  # TODO: probably add a get_hyps_from_cfg function
-        rect=cfg.rect or rect,  # rectangular batches
-        cache=cfg.cache or None,
-        single_cls=cfg.single_cls or False,
-        stride=int(stride),
-        pad=0.0 if mode == "train" else 0.5,
-        prefix=colorstr(f"{mode}: "),
         classes=cfg.classes,
         data=data,
         fraction=cfg.fraction if mode == "train" else 1.0,
@@ -204,3 +185,31 @@ def load_inference_source(source=None, imgsz=640, vid_stride=1, buffer=False):
     setattr(dataset, "source_type", source_type)
 
     return dataset
+
+
+def _build_custom_dataset(cls, cfg, img_path, batch, data, mode="train", rect=False, stride=32):
+    return cls(
+        img_path=img_path,
+        imgsz=cfg.imgsz,
+        batch_size=batch,
+        augment=mode == "train",  # augmentation
+        hyp=cfg,  # TODO: probably add a get_hyps_from_cfg function
+        rect=cfg.rect or rect,  # rectangular batches
+        cache=cfg.cache or None,
+        single_cls=cfg.single_cls or False,
+        stride=int(stride),
+        pad=0.0 if mode == "train" else 0.5,
+        prefix=colorstr(f"{mode}: "),
+        task=cfg.task,
+        classes=cfg.classes,
+        data=data,
+        fraction=cfg.fraction if mode == "train" else 1.0,
+    )
+
+
+def build_mpolygon_dataset(cfg, img_path, batch, data, mode="train", rect=False, stride=32):
+    return _build_custom_dataset(MultiPolygonDataset, cfg, img_path, batch, data, mode, rect, stride)
+
+
+def build_weight_dataset(cfg, img_path, batch, data, mode="train", rect=False, stride=32):
+    return _build_custom_dataset(WeightDataset, cfg, img_path, batch, data, mode, rect, stride)
