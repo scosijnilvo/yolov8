@@ -442,3 +442,18 @@ class RTDETRDecoder(nn.Module):
 class WeightSegment(Segment):
     def __init__(self, nc=80, nm=32, npr=256, ch=()):
         super().__init__(nc, nm, npr, ch)
+        self.segment = Segment.forward
+        self.cv5 = nn.ModuleList(
+            nn.Sequential(
+                Conv(x, 128, 3),
+                nn.Conv2d(128, 1, 1)
+            ) for x in ch
+        )
+
+    def forward(self, x):
+        bs = x[0].shape[0] # batch size
+        weight = torch.cat([self.cv5[i](x[i]).view(bs, 1, -1) for i in range(self.nl)], 2)
+        x = self.segment(self, x)
+        if self.training or self.export:
+            return *x, weight
+        return ((x[0], weight), (x[1][0], x[1][1], x[1][2], weight))
