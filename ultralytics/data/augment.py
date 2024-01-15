@@ -1251,6 +1251,16 @@ class ToTensor:
         return im
 
 
+class WeightFormat(Format):
+    def __call__(self, labels):
+        # preserve weights when formatting
+        new_labels = super.__call__(labels)
+        if "weights" in labels:
+            weights = labels.pop("weights")
+            new_labels["weights"] = weights
+        return new_labels
+
+
 class MultiPolygonFormat(Format):
     def _format_segments(self, instances, cls, w, h):
         """Convert polygon points to bitmap."""

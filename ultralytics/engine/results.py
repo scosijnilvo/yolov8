@@ -373,6 +373,24 @@ class Results(SimpleClass):
         return json.dumps(results, indent=2)
 
 
+class WeightResults(Results):
+    """TODO"""
+
+    def __init__(self, orig_img, path, names, boxes=None, masks=None, probs=None, keypoints=None, obb=None, weights=None):
+        super().__init__(orig_img, path, names, boxes, masks, probs, keypoints, obb)
+        self.weights = weights
+        self._keys = "boxes", "masks", "probs", "keypoints", "obb", "weights"
+
+    def update(self, boxes=None, masks=None, probs=None, weights=None):
+        super().update(boxes, masks, probs) 
+        if weights is not None:
+            self.weights = weights
+
+    def new(self):
+        """Return a new WeightResults object with the same image, path, and names."""
+        return Results(orig_img=self.orig_img, path=self.path, names=self.names)
+
+
 class Boxes(BaseTensor):
     """
     A class for storing and manipulating detection boxes.

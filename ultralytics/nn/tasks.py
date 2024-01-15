@@ -375,7 +375,7 @@ class WeightSegmentationModel(SegmentationModel):
 
     def __init__(self, cfg="yolov8n-weight-seg.yaml", ch=3, nc=None, verbose=True):
         """Initialize the WeightSegmentationModel with given config and parameters."""
-        super().__init__(cfg, ch, nc, verbose)
+        super().__init__(cfg=cfg, ch=ch, nc=nc, verbose=verbose)
 
     def init_criterion(self):
         """Initialize the loss criterion for the WeightSegmentationModel."""
@@ -819,12 +819,15 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             args = [ch[f]]
         elif m is Concat:
             c2 = sum(ch[x] for x in f)
-        elif m in (Detect, Segment, Pose, OBB, WeightSegment):
+        elif m in (Detect, Segment, Pose, OBB):
             args.append([ch[x] for x in f])
-            if m is Segment or m is WeightSegment:
+            if m is Segment:
                 args[2] = make_divisible(min(args[2], max_channels) * width, 8)
         elif m is RTDETRDecoder:  # special case, channels arg must be passed in index 1
             args.insert(1, [ch[x] for x in f])
+        elif m is WeightSegment:
+            args.append([ch[x] for x in f])
+            args[2] = make_divisible(min(args[2], max_channels) * width, 8)
         else:
             c2 = ch[f]
 

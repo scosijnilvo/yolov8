@@ -292,6 +292,21 @@ class RotatedTaskAlignedAssigner(TaskAlignedAssigner):
         return is_in_box
 
 
+class WeightTaskAlignedAssigner(TaskAlignedAssigner):
+    """TODO"""
+
+    @torch.no_grad()
+    def forward(self, pd_scores, pd_bboxes, anc_points, gt_labels, gt_bboxes, gt_weights, mask_gt):
+        # TODO
+        tar_labels, tar_bboxes, tar_scores, fg_mask, tar_gt_idx = super().forward(
+            pd_scores, pd_bboxes, anc_points, gt_labels, gt_bboxes, mask_gt
+        )
+        print(f"target_gt_idx: {tar_gt_idx}")
+        print(f"gt_weights: {gt_weights}")
+        print(f"fg_mask: {fg_mask}")
+        return tar_labels, tar_bboxes, tar_scores, tar_weights, fg_mask, tar_gt_idx
+
+
 def make_anchors(feats, strides, grid_cell_offset=0.5):
     """Generate anchors from features."""
     anchor_points, stride_tensor = [], []

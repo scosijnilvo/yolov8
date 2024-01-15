@@ -12,6 +12,7 @@ from ultralytics.utils import LOGGER, NUM_THREADS, ops
 from ultralytics.utils.checks import check_requirements
 from ultralytics.utils.metrics import SegmentMetrics, box_iou, mask_iou
 from ultralytics.utils.plotting import output_to_target, plot_images
+from ultralytics.data.build import build_weight_dataset
 
 
 class SegmentationValidator(DetectionValidator):
@@ -271,3 +272,24 @@ class SegmentationValidator(DetectionValidator):
             except Exception as e:
                 LOGGER.warning(f"pycocotools unable to run: {e}")
         return stats
+
+
+class WeightSegmentationValidator(SegmentationValidator):
+    def postprocess(self, preds):
+        """Post-processes YOLO predictions and returns output detections with proto."""
+        p = ops.nms_weights(
+            preds[0],
+            self.args.conf,
+            self.args.iou,
+            labels=self.lb,
+            multi_label=True,
+            agnostic=self.args.single_cls,
+            max_det=self.args.max_det,
+            nc=self.nc,
+            weights=preds[1][-1]
+        )
+        proto = preds[1][-2] if len(preds[1]) == 4 else preds[1]  # second output is len 4 if pt, but only 1 if exported
+        return p, proto
+
+    def build_dataset(self, img_path, mode="val", batch=None):
+        return build_weight_dataset(self.args, img_path, batch, self.data, mode=mode, stride=self.stride)

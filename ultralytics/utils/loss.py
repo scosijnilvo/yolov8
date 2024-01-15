@@ -6,7 +6,14 @@ import torch.nn.functional as F
 
 from ultralytics.utils.metrics import OKS_SIGMA
 from ultralytics.utils.ops import crop_mask, xywh2xyxy, xyxy2xywh
-from ultralytics.utils.tal import RotatedTaskAlignedAssigner, TaskAlignedAssigner, dist2bbox, dist2rbox, make_anchors
+from ultralytics.utils.tal import (
+    RotatedTaskAlignedAssigner,
+    TaskAlignedAssigner,
+    WeightTaskAlignedAssigner,
+    dist2bbox,
+    dist2rbox,
+    make_anchors
+)
 
 from .metrics import bbox_iou, probiou
 from .tal import bbox2dist
@@ -711,6 +718,71 @@ class v8OBBLoss(v8DetectionLoss):
 class WeightSegmentationLoss(v8SegmentationLoss):
     """TODO"""
 
+    def __init__(self, model):
+        super().__init__(model)
+        topk = self.assigner.topk
+        alpha = self.assigner.alpha
+        beta = self.assigner.beta
+        # create new task-aligned assigner that includes ground-truth values for weights
+        self.assigner = WeightTaskAlignedAssigner(topk=topk, num_classes=self.nc, alpha=alpha, beta=beta)
+
     def __call__(self, preds, batch):
-        # TODO update loss function
-        return super().__call__(preds, batch)
+        # TODO
+        loss = torch.zeros(5, device=self.device) # box, seg, cls, dfl, weight
+        feats, pred_masks, proto, weights = preds if len(preds) == 4 else preds[1]
+        batch_size, _, mask_h, mask_w = proto.shape
+        pred_distri, pred_scores = torch.cat([xi.view(feats[0].shape[0], self.no, -1) for xi in feats], 2).split(
+            (self.reg_max * 4, self.nc), 1
+        )
+        pred_scores = pred_scores.permute(0, 2, 1).contiguous()
+        pred_distri = pred_distri.permute(0, 2, 1).contiguous()
+        pred_masks = pred_masks.permute(0, 2, 1).contiguous()
+        dtype = pred_scores.dtype
+        imgsz = torch.tensor(feats[0].shape[2:], device=self.device, dtype=dtype) * self.stride[0]
+        anchor_points, stride_tensor = make_anchors(feats, self.stride, 0.5)
+        batch_idx = batch["batch_idx"].view(-1, 1)
+        targets = torch.cat((batch_idx, batch["cls"].view(-1, 1), batch["bboxes"]), 1)
+        targets = self.preprocess(targets.to(self.device), batch_size, scale_tensor=imgsz[[1, 0, 1, 0]])
+        gt_labels, gt_bboxes = targets.split((1, 4), 2)  # cls, xyxy
+        mask_gt = gt_bboxes.sum(2, keepdim=True).gt_(0)
+        pred_bboxes = self.bbox_decode(anchor_points, pred_distri)  # xyxy, (b, h*w, 4)
+        gt_weights = batch["weights"].to(self.device).float()
+        _, target_bboxes, target_scores, target_weights, fg_mask, target_gt_idx = self.assigner(
+            pred_scores.detach().sigmoid(),
+            (pred_bboxes.detach() * stride_tensor).type(gt_bboxes.dtype),
+            anchor_points * stride_tensor,
+            gt_labels,
+            gt_bboxes,
+            gt_weights,
+            mask_gt,
+        )
+        target_scores_sum = max(target_scores.sum(), 1)
+        loss[2] = self.bce(pred_scores, target_scores.to(dtype)).sum / target_scores_sum # BCE
+        if fg_mask.sum():
+            # Bbox loss
+            loss[0], loss[3] = self.bbox_loss(
+                pred_distri,
+                pred_bboxes,
+                anchor_points,
+                target_bboxes / stride_tensor,
+                target_scores,
+                target_scores_sum,
+                fg_mask,
+            )
+            # Masks loss
+            masks = batch["masks"].to(self.device).float()
+            if tuple(masks.shape[-2:]) != (mask_h, mask_w):  # downsample
+                masks = F.interpolate(masks[None], (mask_h, mask_w), mode="nearest")[0]
+            loss[1] = self.calculate_segmentation_loss(
+                fg_mask, masks, target_gt_idx, target_bboxes, batch_idx, proto, pred_masks, imgsz, self.overlap
+            )
+            # Weights loss
+            #pred_weights = TODO
+        # WARNING: lines below prevent Multi-GPU DDP 'unused gradient' PyTorch errors, do not remove
+        else:
+            loss[1] += (proto * 0).sum() + (pred_masks * 0).sum()  # inf sums may lead to nan loss
+        loss[0] *= self.hyp.box  # box gain
+        loss[1] *= self.hyp.box  # seg gain
+        loss[2] *= self.hyp.cls  # cls gain
+        loss[3] *= self.hyp.dfl  # dfl gain
+        return loss.sum() * batch_size, loss.detach()  # loss(box, seg, cls, dfl, weight)

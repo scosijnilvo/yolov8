@@ -20,6 +20,7 @@ from .augment import (
     Instances,
     LetterBox,
     MultiPolygonFormat,
+    WeightFormat,
     classify_augmentations,
     classify_transforms,
     v8_transforms,
@@ -585,3 +586,45 @@ class WeightDataset(YOLODataset):
         x["msgs"] = msgs  # warnings
         save_dataset_cache_file(self.prefix, path, x)
         return x
+
+    @staticmethod
+    def collate_fn(batch):
+        """Collates data samples into batches."""
+        new_batch = {}
+        keys = batch[0].keys()
+        print(keys)
+        values = list(zip(*[list(b.values()) for b in batch]))
+        for i, k in enumerate(keys):
+            value = values[i]
+            if k == "img":
+                value = torch.stack(value, 0)
+            if k in ["masks", "keypoints", "bboxes", "cls", "segments", "obb", "weights"]:
+                value = torch.cat(value, 0)
+            new_batch[k] = value
+        new_batch["batch_idx"] = list(new_batch["batch_idx"])
+        for i in range(len(new_batch["batch_idx"])):
+            new_batch["batch_idx"][i] += i  # add target image index for build_targets()
+        new_batch["batch_idx"] = torch.cat(new_batch["batch_idx"], 0)
+        return new_batch
+
+    def build_transforms(self, hyp=None):
+        """Builds and appends transforms to the list."""
+        if self.augment:
+            hyp.mosaic = hyp.mosaic if self.augment and not self.rect else 0.0
+            hyp.mixup = hyp.mixup if self.augment and not self.rect else 0.0
+            transforms = v8_transforms(self, self.imgsz, hyp)
+        else:
+            transforms = Compose([LetterBox(new_shape=(self.imgsz, self.imgsz), scaleup=False)])
+        transforms.append(
+            WeightFormat(
+                bbox_format="xywh",
+                normalize=True,
+                return_mask=self.use_segments,
+                return_keypoint=self.use_keypoints,
+                return_obb=self.use_obb,
+                batch_idx=True,
+                mask_ratio=hyp.mask_ratio,
+                mask_overlap=hyp.overlap_mask,
+            )
+        )
+        return transforms
