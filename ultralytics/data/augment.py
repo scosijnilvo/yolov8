@@ -303,12 +303,17 @@ class Mosaic(BaseMixTransform):
         """Return labels with mosaic border instances clipped."""
         if len(mosaic_labels) == 0:
             return {}
+        incl_weights = "weights" in mosaic_labels[0]
+        if incl_weights:
+            weights = []
         cls = []
         instances = []
         imgsz = self.imgsz * 2  # mosaic imgsz
         for labels in mosaic_labels:
             cls.append(labels["cls"])
             instances.append(labels["instances"])
+            if incl_weights:
+                weights.append(labels["weights"])
         # Final labels
         final_labels = {
             "im_file": mosaic_labels[0]["im_file"],
@@ -321,6 +326,9 @@ class Mosaic(BaseMixTransform):
         final_labels["instances"].clip(imgsz, imgsz)
         good = final_labels["instances"].remove_zero_area_boxes()
         final_labels["cls"] = final_labels["cls"][good]
+        if incl_weights:
+            final_labels["weights"] = np.concatenate(weights, 0)
+            final_labels["weights"] = final_labels["weights"][good]
         return final_labels
 
 
@@ -342,6 +350,8 @@ class MixUp(BaseMixTransform):
         labels["img"] = (labels["img"] * r + labels2["img"] * (1 - r)).astype(np.uint8)
         labels["instances"] = Instances.concatenate([labels["instances"], labels2["instances"]], axis=0)
         labels["cls"] = np.concatenate([labels["cls"], labels2["cls"]], 0)
+        if "weights" in labels:
+            labels["weights"] = np.concatenate([labels["weights"], labels2["weights"]], 0)
         return labels
 
 
@@ -558,6 +568,8 @@ class RandomPerspective:
         labels["cls"] = cls[i]
         labels["img"] = img
         labels["resized_shape"] = img.shape[:2]
+        if "weights" in labels:
+            labels["weights"] = labels["weights"][i]
         return labels
 
     def box_candidates(self, box1, box2, wh_thr=2, ar_thr=100, area_thr=0.1, eps=1e-16):
@@ -784,6 +796,9 @@ class CopyPaste:
             1. Instances are expected to have 'segments' as one of their attributes for this augmentation to work.
             2. This method modifies the input dictionary 'labels' in place.
         """
+        incl_weights = "weights" in labels
+        if incl_weights:
+            weights = labels["weights"]
         im = labels["img"]
         cls = labels["cls"]
         h, w = im.shape[:2]
@@ -806,6 +821,8 @@ class CopyPaste:
                 cls = np.concatenate((cls, cls[[j]]), axis=0)
                 instances = Instances.concatenate((instances, ins_flip[[j]]), axis=0)
                 cv2.drawContours(im_new, instances.segments[[j]].astype(np.int32), -1, (1, 1, 1), cv2.FILLED)
+                if incl_weights:
+                    weights = np.concatenate((weights, weights[[j]]), axis=0)
 
             result = cv2.flip(im, 1)  # augment segments (flip left-right)
             i = cv2.flip(im_new, 1).astype(bool)
@@ -814,6 +831,8 @@ class CopyPaste:
         labels["img"] = im
         labels["cls"] = cls
         labels["instances"] = instances
+        if incl_weights:
+            labels["weights"] = weights
         return labels
 
 
@@ -1253,11 +1272,10 @@ class ToTensor:
 
 class WeightFormat(Format):
     def __call__(self, labels):
-        # preserve weights when formatting
-        new_labels = super.__call__(labels)
-        if "weights" in labels:
-            weights = labels.pop("weights")
-            new_labels["weights"] = weights
+        nl = len(labels["instances"])
+        weights = labels.pop("weights")
+        new_labels = super().__call__(labels)
+        new_labels["weights"] = torch.from_numpy(weights) if nl else torch.zeros(nl)
         return new_labels
 
 

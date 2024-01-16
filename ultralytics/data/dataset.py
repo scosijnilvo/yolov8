@@ -592,7 +592,6 @@ class WeightDataset(YOLODataset):
         """Collates data samples into batches."""
         new_batch = {}
         keys = batch[0].keys()
-        print(keys)
         values = list(zip(*[list(b.values()) for b in batch]))
         for i, k in enumerate(keys):
             value = values[i]

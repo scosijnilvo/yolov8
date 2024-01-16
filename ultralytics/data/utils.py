@@ -785,7 +785,7 @@ def verify_image_label_with_weight(args):
             with open(lb_file) as f:
                 lb = [x.split() for x in f.read().strip().splitlines() if len(x)]
                 classes = np.array([x[0] for x in lb], dtype=np.float32)
-                weights = np.array([x[1] for x in lb], dtype=np.float32)
+                weights = np.array([x[1] for x in lb], dtype=np.float32).reshape(-1, 1)
                 if any(len(x) > 7 for x in lb) and (not keypoint):  # is segment
                     segments = [np.array(x[2:], dtype=np.float32).reshape(-1, 2) for x in lb]
                     lb = np.concatenate((classes.reshape(-1, 1), segments2boxes(segments)), 1)
