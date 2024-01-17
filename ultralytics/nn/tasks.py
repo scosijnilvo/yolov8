@@ -371,7 +371,7 @@ class SegmentationModel(DetectionModel):
 
 
 class WeightSegmentationModel(SegmentationModel):
-    """TODO"""
+    """Model for segmentation and prediction of object weight"""
 
     def __init__(self, cfg="yolov8n-weight-seg.yaml", ch=3, nc=None, verbose=True):
         """Initialize the WeightSegmentationModel with given config and parameters."""
@@ -727,7 +727,6 @@ def attempt_load_one_weight(weight, device=None, inplace=True, fuse=False):
     model.task = guess_model_task(model)
     if not hasattr(model, "stride"):
         model.stride = torch.tensor([32.0])
-
     model = model.fuse().eval() if fuse and hasattr(model, "fuse") else model.eval()  # model in eval mode
 
     # Module updates

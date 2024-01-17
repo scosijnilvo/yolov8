@@ -60,6 +60,7 @@ class SegmentationPredictor(DetectionPredictor):
 class WeightSegmentationPredictor(SegmentationPredictor):
     def postprocess(self, preds, img, orig_imgs):
         """Applies non-max suppression and processes detections for each image in an input batch."""
+        # p, w = ops.nms_weights(
         p = ops.nms_weights(
             preds[0],
             self.args.conf,
@@ -68,13 +69,14 @@ class WeightSegmentationPredictor(SegmentationPredictor):
             max_det=self.args.max_det,
             nc=len(self.model.names),
             classes=self.args.classes,
-            weights=preds[1][-1]
+            weights=preds[1][3]
         )
         if not isinstance(orig_imgs, list):  # input images are a torch.Tensor, not a list
             orig_imgs = ops.convert_torch2numpy_batch(orig_imgs)
         results = []
-        proto = preds[1][-2] if len(preds[1]) == 4 else preds[1]  # second output is len 4 if pt, but only 1 if exported
-        for i, (pred, weights) in enumerate(p):
+        proto = preds[1][2] if len(preds[1]) == 4 else preds[1]  # second output is len 4 if pt, but only 1 if exported
+        # for i, (pred, weights) in enumerate(zip(p, w)):
+        for i, pred in enumerate(p):
             orig_img = orig_imgs[i]
             img_path = self.batch[0][i]
             if not len(pred):  # save empty boxes
@@ -92,7 +94,7 @@ class WeightSegmentationPredictor(SegmentationPredictor):
                     names=self.model.names,
                     boxes=pred[:, :6],
                     masks=masks,
-                    weights=weights[i]
+                    # weights=weights
                 )
             )
         return results

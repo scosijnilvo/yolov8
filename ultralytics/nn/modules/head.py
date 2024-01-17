@@ -446,7 +446,8 @@ class WeightSegment(Segment):
         self.cv5 = nn.ModuleList(
             nn.Sequential(
                 Conv(x, 128, 3),
-                nn.Conv2d(128, 1, 1)
+                nn.Conv2d(128, 1, 1),
+                nn.ReLU()
             ) for x in ch
         )
 

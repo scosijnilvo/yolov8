@@ -860,64 +860,67 @@ def nms_weights(
     multi_label &= nc > 1  # multiple labels per box (adds 0.5ms/img)
 
     prediction = prediction.transpose(-1, -2)  # shape(1,84,6300) to shape(1,6300,84)
+    weights = weights.transpose(-1, -2)
     if not rotated:
         prediction[..., :4] = xywh2xyxy(prediction[..., :4])  # xywh to xyxy
 
     t = time.time()
     output1 = [torch.zeros((0, 6 + nm), device=prediction.device)] * bs
-    # output2 = TODO
-    for xi, x in enumerate(prediction):  # image index, image inference
+    output2 = [torch.zeros((0, 1), device=prediction.device)] * bs
+    # for xi, (x1, x2) in enumerate(zip(prediction, weights)):
+    for xi, x1 in enumerate(prediction):
         # Apply constraints
         # x[((x[:, 2:4] < min_wh) | (x[:, 2:4] > max_wh)).any(1), 4] = 0  # width-height
-        x = x[xc[xi]]  # confidence
+        x1 = x1[xc[xi]]  # confidence
+        # x2 = x2[xc[xi]]
 
         # Cat apriori labels if autolabelling
         if labels and len(labels[xi]) and not rotated:
             lb = labels[xi]
-            v = torch.zeros((len(lb), nc + nm + 4), device=x.device)
+            v = torch.zeros((len(lb), nc + nm + 4), device=x1.device)
             v[:, :4] = xywh2xyxy(lb[:, 1:5])  # box
             v[range(len(lb)), lb[:, 0].long() + 4] = 1.0  # cls
-            x = torch.cat((x, v), 0)
+            x1 = torch.cat((x1, v), 0)
 
         # If none remain process next image
-        if not x.shape[0]:
+        if not x1.shape[0]:
             continue
 
         # Detections matrix nx6 (xyxy, conf, cls)
-        box, cls, mask = x.split((4, nc, nm), 1)
+        box, cls, mask = x1.split((4, nc, nm), 1)
 
         if multi_label:
             i, j = torch.where(cls > conf_thres)
-            x = torch.cat((box[i], x[i, 4 + j, None], j[:, None].float(), mask[i]), 1)
+            x1 = torch.cat((box[i], x1[i, 4 + j, None], j[:, None].float(), mask[i]), 1)
         else:  # best class only
             conf, j = cls.max(1, keepdim=True)
-            x = torch.cat((box, conf, j.float(), mask), 1)[conf.view(-1) > conf_thres]
+            x1 = torch.cat((box, conf, j.float(), mask), 1)[conf.view(-1) > conf_thres]
 
         # Filter by class
         if classes is not None:
-            x = x[(x[:, 5:6] == torch.tensor(classes, device=x.device)).any(1)]
+            x1 = x1[(x1[:, 5:6] == torch.tensor(classes, device=x1.device)).any(1)]
 
         # Check shape
-        n = x.shape[0]  # number of boxes
+        n = x1.shape[0]  # number of boxes
         if not n:  # no boxes
             continue
         if n > max_nms:  # excess boxes
-            x = x[x[:, 4].argsort(descending=True)[:max_nms]]  # sort by confidence and remove excess boxes
+            x1 = x1[x1[:, 4].argsort(descending=True)[:max_nms]]  # sort by confidence and remove excess boxes
 
         # Batched NMS
-        c = x[:, 5:6] * (0 if agnostic else max_wh)  # classes
-        scores = x[:, 4]  # scores
+        c = x1[:, 5:6] * (0 if agnostic else max_wh)  # classes
+        scores = x1[:, 4]  # scores
         if rotated:
-            boxes = torch.cat((x[:, :2] + c, x[:, 2:4], x[:, -1:]), dim=-1)  # xywhr
+            boxes = torch.cat((x1[:, :2] + c, x1[:, 2:4], x1[:, -1:]), dim=-1)  # xywhr
             i = nms_rotated(boxes, scores, iou_thres)
         else:
-            boxes = x[:, :4] + c  # boxes (offset by class)
+            boxes = x1[:, :4] + c  # boxes (offset by class)
             i = torchvision.ops.nms(boxes, scores, iou_thres)  # NMS
         i = i[:max_det]  # limit detections
 
-        output1[xi] = x[i]
+        output1[xi] = x1[i]
+        # output2[xi] = x2[i]
         if (time.time() - t) > time_limit:
             LOGGER.warning(f"WARNING ⚠️ NMS time limit {time_limit:.3f}s exceeded")
             break  # time limit exceeded
-
-    return output1#, output2
+    return output1 # , output2

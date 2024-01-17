@@ -1286,3 +1286,63 @@ class OBBMetrics(SimpleClass):
     def curves_results(self):
         """Returns a list of curves for accessing specific metrics curves."""
         return []
+
+
+class WeightMetric(SimpleClass):
+    """TODO"""
+
+    def __init__(self):
+        """Initializes a WeightMetric instance for computing evaluation metrics for the model."""
+        self.r2 = []
+        self.mae = []
+        self.mse = []
+        self.rmse = []
+        self.nc = 0 # number of classes
+
+    @property
+    def r2(self):
+        """Mean of R2 for all classes."""
+        return np.mean(self.r2)
+        
+    @property
+    def mae(self):
+        """Mean of MAE for all classes."""
+        return np.mean(self.mae)
+
+    @property
+    def mse(self):
+        """Mean of MSE for all classes."""
+        return np.mean(self.mse)
+
+    @property
+    def rmse(self):
+        """Mean of RMSE for all classes."""
+        return np.mean(self.rmse)
+
+    def update(self, results):
+        """
+        Updates the evaluation metrics of the model with a new set of results.
+        """
+        self.r2, self.mae, self.mse, self.rmse = results
+
+
+class WeightSegmentMetrics(SegmentMetrics):
+    """
+    Calculates and aggregates detection, segmentation, and weight metrics.
+    """
+
+    def __init__(self, save_dir=Path("."), plot=False, on_plot=None, names=()) -> None:
+        super().__init__(save_dir, plot, on_plot, names)
+        self.weight = WeightMetric()
+
+    def process(self, tp, tp_m, conf, pred_cls, target_cls):
+        super().process(tp, tp_m, conf, pred_cls, target_cls)
+
+    @property
+    def keys(self):
+        keys = super().keys
+        keys.append("metrics/R2(W)")
+        keys.append("metrics/MAE(W)")
+        keys.append("metrics/MSE(W)")
+        keys.append("metrics/RMSE(W)")
+        return keys

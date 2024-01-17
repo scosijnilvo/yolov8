@@ -277,6 +277,7 @@ class SegmentationValidator(DetectionValidator):
 class WeightSegmentationValidator(SegmentationValidator):
     def postprocess(self, preds):
         """Post-processes YOLO predictions and returns output detections with proto."""
+        # p, w = ops.nms_weights(
         p = ops.nms_weights(
             preds[0],
             self.args.conf,
@@ -286,10 +287,68 @@ class WeightSegmentationValidator(SegmentationValidator):
             agnostic=self.args.single_cls,
             max_det=self.args.max_det,
             nc=self.nc,
-            weights=preds[1][-1]
+            weights=preds[1][3]
         )
-        proto = preds[1][-2] if len(preds[1]) == 4 else preds[1]  # second output is len 4 if pt, but only 1 if exported
-        return p, proto
+        proto = preds[1][2] if len(preds[1]) == 4 else preds[1]  # second output is len 4 if pt, but only 1 if exported
+        return p, proto # , w
 
     def build_dataset(self, img_path, mode="val", batch=None):
         return build_weight_dataset(self.args, img_path, batch, self.data, mode=mode, stride=self.stride)
+
+    def update_metrics(self, preds, batch):
+        """Metrics."""
+        for si, (pred, proto) in enumerate(zip(*preds)):
+            # TODO process weights
+            self.seen += 1
+            npr = len(pred)
+            stat = dict(
+                conf=torch.zeros(0, device=self.device),
+                pred_cls=torch.zeros(0, device=self.device),
+                tp=torch.zeros(npr, self.niou, dtype=torch.bool, device=self.device),
+                tp_m=torch.zeros(npr, self.niou, dtype=torch.bool, device=self.device),
+            )
+            pbatch = self._prepare_batch(si, batch)
+            cls, bbox = pbatch.pop("cls"), pbatch.pop("bbox")
+            nl = len(cls)
+            stat["target_cls"] = cls
+            if npr == 0:
+                if nl:
+                    for k in self.stats.keys():
+                        self.stats[k].append(stat[k])
+                    if self.args.plots:
+                        self.confusion_matrix.process_batch(detections=None, gt_bboxes=bbox, gt_cls=cls)
+                continue
+
+            # Masks
+            gt_masks = pbatch.pop("masks")
+            # Predictions
+            if self.args.single_cls:
+                pred[:, 5] = 0
+            predn, pred_masks = self._prepare_pred(pred, pbatch, proto)
+            stat["conf"] = predn[:, 4]
+            stat["pred_cls"] = predn[:, 5]
+
+            # Evaluate
+            if nl:
+                stat["tp"] = self._process_batch(predn, bbox, cls)
+                stat["tp_m"] = self._process_batch(
+                    predn, bbox, cls, pred_masks, gt_masks, self.args.overlap_mask, masks=True
+                )
+                if self.args.plots:
+                    self.confusion_matrix.process_batch(predn, bbox, cls)
+
+            for k in self.stats.keys():
+                self.stats[k].append(stat[k])
+
+            pred_masks = torch.as_tensor(pred_masks, dtype=torch.uint8)
+            if self.args.plots and self.batch_i < 3:
+                self.plot_masks.append(pred_masks[:15].cpu())  # filter top 15 to plot
+
+            # Save
+            if self.args.save_json:
+                pred_masks = ops.scale_image(
+                    pred_masks.permute(1, 2, 0).contiguous().cpu().numpy(),
+                    pbatch["ori_shape"],
+                    ratio_pad=batch["ratio_pad"][si],
+                )
+                self.pred_to_json(predn, batch["im_file"][si], pred_masks)
