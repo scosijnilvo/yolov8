@@ -457,4 +457,4 @@ class WeightSegment(Segment):
         x = self.segment(self, x)
         if self.training or self.export:
             return *x, weight
-        return (x[0], (x[1][0], x[1][1], x[1][2], weight))
+        return (x[0], (*x[1], weight))

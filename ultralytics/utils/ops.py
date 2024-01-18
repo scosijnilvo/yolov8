@@ -877,7 +877,6 @@ def nms_weights(
         if multi_label:
             i, j = torch.where(cls > conf_thres)
             x = torch.cat((box[i], x[i, 4 + j, None], j[:, None].float(), mask[i], weight[i]), 1)
-            #w = w[i]
         else:  # best class only
             conf, j = cls.max(1, keepdim=True)
             x = torch.cat((box, conf, j.float(), mask, weight), 1)[conf.view(-1) > conf_thres]
@@ -902,7 +901,7 @@ def nms_weights(
 
         x1, x2 = x.split((x.shape[1] - 1, 1), dim=1)  # split prediction and weights
         output1[xi] = x1[i]
-        output2[xi] = x2[i]
+        output2[xi] = x2[i].squeeze(dim=1)
         if (time.time() - t) > time_limit:
             LOGGER.warning(f"WARNING ⚠️ NMS time limit {time_limit:.3f}s exceeded")
             break  # time limit exceeded
