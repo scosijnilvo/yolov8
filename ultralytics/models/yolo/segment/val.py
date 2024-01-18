@@ -277,8 +277,7 @@ class SegmentationValidator(DetectionValidator):
 class WeightSegmentationValidator(SegmentationValidator):
     def postprocess(self, preds):
         """Post-processes YOLO predictions and returns output detections with proto."""
-        # p, w = ops.nms_weights(
-        p = ops.nms_weights(
+        p, w = ops.nms_weights(
             preds[0],
             self.args.conf,
             self.args.iou,
@@ -290,14 +289,14 @@ class WeightSegmentationValidator(SegmentationValidator):
             weights=preds[1][3]
         )
         proto = preds[1][2] if len(preds[1]) == 4 else preds[1]  # second output is len 4 if pt, but only 1 if exported
-        return p, proto # , w
+        return p, proto, w
 
     def build_dataset(self, img_path, mode="val", batch=None):
         return build_weight_dataset(self.args, img_path, batch, self.data, mode=mode, stride=self.stride)
 
     def update_metrics(self, preds, batch):
         """Metrics."""
-        for si, (pred, proto) in enumerate(zip(*preds)):
+        for si, (pred, proto, weights) in enumerate(zip(*preds)):
             # TODO process weights
             self.seen += 1
             npr = len(pred)
