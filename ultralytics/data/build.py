@@ -22,9 +22,8 @@ from ultralytics.data.loaders import (
 from ultralytics.data.utils import IMG_FORMATS, VID_FORMATS
 from ultralytics.utils import RANK, colorstr
 from ultralytics.utils.checks import check_file
-
 from .dataset import YOLODataset
-from .dataset import WeightDataset, MultiPolygonDataset
+from .dataset import WeightDataset
 from .utils import PIN_MEMORY
 
 
@@ -206,10 +205,6 @@ def _build_custom_dataset(cls, cfg, img_path, batch, data, mode="train", rect=Fa
         data=data,
         fraction=cfg.fraction if mode == "train" else 1.0,
     )
-
-
-def build_mpolygon_dataset(cfg, img_path, batch, data, mode="train", rect=False, stride=32):
-    return _build_custom_dataset(MultiPolygonDataset, cfg, img_path, batch, data, mode, rect, stride)
 
 
 def build_weight_dataset(cfg, img_path, batch, data, mode="train", rect=False, stride=32):

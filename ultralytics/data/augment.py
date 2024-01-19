@@ -16,7 +16,6 @@ from ultralytics.utils.metrics import bbox_ioa
 from ultralytics.utils.ops import segment2box, xyxyxyxy2xywhr
 from ultralytics.utils.torch_utils import TORCHVISION_0_10, TORCHVISION_0_11, TORCHVISION_0_13
 from .utils import polygons2masks, polygons2masks_overlap
-from .utils import mpolygons2masks, mpolygons2masks_overlap
 
 DEFAULT_MEAN = (0.0, 0.0, 0.0)
 DEFAULT_STD = (1.0, 1.0, 1.0)
@@ -1277,46 +1276,3 @@ class WeightFormat(Format):
         new_labels = super().__call__(labels)
         new_labels["weights"] = torch.from_numpy(weights) if nl else torch.zeros(nl)
         return new_labels
-
-
-class MultiPolygonFormat(Format):
-    def _format_segments(self, instances, cls, w, h):
-        """Convert polygon points to bitmap."""
-        segments = instances.segments
-        if self.mask_overlap:
-            # TODO implement overlapping masks
-            masks, sorted_idx = mpolygons2masks_overlap((h, w), segments, downsample_ratio=self.mask_ratio)
-            masks = masks[None]  # (640, 640) -> (1, 640, 640)
-            instances = instances[sorted_idx]
-            cls = cls[sorted_idx]
-        else:
-            masks = mpolygons2masks((h, w), segments, downsample_ratio=self.mask_ratio)
-        return masks, instances, cls
-
-
-def v8_transforms_multipolygon(dataset, imgsz, hyp, stretch=False):
-    """Convert images to a size suitable for YOLOv8 training."""
-    pre_transform = Compose(
-        [
-            Mosaic(dataset, imgsz=imgsz, p=hyp.mosaic),
-            CopyPaste(p=hyp.copy_paste),
-            LetterBox(new_shape=(imgsz, imgsz)),
-            # RandomPerspective(
-            #    degrees=hyp.degrees,
-            #    translate=hyp.translate,
-            #    scale=hyp.scale,
-            #    shear=hyp.shear,
-            #    perspective=hyp.perspective,
-            #    pre_transform=None if stretch else LetterBox(new_shape=(imgsz, imgsz)),
-            # )
-        ]
-    )
-    return Compose(
-        [
-            pre_transform,
-            MixUp(dataset, pre_transform=pre_transform, p=hyp.mixup),
-            RandomHSV(hgain=hyp.hsv_h, sgain=hyp.hsv_s, vgain=hyp.hsv_v),
-            RandomFlip(direction="vertical", p=hyp.flipud),
-            RandomFlip(direction="horizontal", p=hyp.fliplr),
-        ]
-    )

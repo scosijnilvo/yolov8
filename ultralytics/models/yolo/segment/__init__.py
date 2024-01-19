@@ -1,7 +1,7 @@
 # Ultralytics YOLO 🚀, AGPL-3.0 license
 
 from .predict import SegmentationPredictor, WeightSegmentationPredictor
-from .train import SegmentationTrainer, WeightSegmentationTrainer, MultiPolygonSegmentationTrainer
+from .train import SegmentationTrainer, WeightSegmentationTrainer
 from .val import SegmentationValidator, WeightSegmentationValidator
 
 __all__ = (
@@ -11,5 +11,4 @@ __all__ = (
     "WeightSegmentationTrainer",
     "WeightSegmentationPredictor",
     "WeightSegmentationValidator",
-    "MultiPolygonSegmentationTrainer", 
 )

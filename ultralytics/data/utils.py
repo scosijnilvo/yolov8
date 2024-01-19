@@ -40,10 +40,10 @@ VID_FORMATS = "asf", "avi", "gif", "m4v", "mkv", "mov", "mp4", "mpeg", "mpg", "t
 PIN_MEMORY = str(os.getenv("PIN_MEMORY", True)).lower() == "true"  # global pin_memory for dataloaders
 
 
-def img2label_paths(img_paths, label_ext=".txt"):
+def img2label_paths(img_paths):
     """Define label paths as a function of image paths."""
     sa, sb = f"{os.sep}images{os.sep}", f"{os.sep}labels{os.sep}"  # /images/, /labels/ substrings
-    return [sb.join(x.rsplit(sa, 1)).rsplit(".", 1)[0] + label_ext for x in img_paths]
+    return [sb.join(x.rsplit(sa, 1)).rsplit(".", 1)[0] + ".txt" for x in img_paths]
 
 
 def get_hash(paths):
@@ -645,119 +645,6 @@ def autosplit(path=DATASETS_DIR / "coco8/images", weights=(0.9, 0.1, 0.0), annot
         if not annotated_only or Path(img2label_paths([str(img)])[0]).exists():  # check label
             with open(path.parent / txt[i], "a") as f:
                 f.write(f"./{img.relative_to(path.parent).as_posix()}" + "\n")  # add image to txt file
-
-
-def mpolygons2mask(imgsz, polygons, color, downsample_ratio):
-    mask = np.zeros(imgsz, dtype=np.uint8)
-    cv2.fillPoly(mask, polygons, color=color)
-    nh, nw = (imgsz[0] // downsample_ratio, imgsz[1] // downsample_ratio)
-    mask = cv2.resize(mask, (nw, nh))
-    return mask
-
-
-def mpolygons2masks(imgsz, segments, color=1, downsample_ratio=1):
-    masks = []
-    for seg in segments:
-        polygons = [np.asarray(x, dtype=np.int32) for x in seg]
-        mask = mpolygons2mask(imgsz, polygons, color, downsample_ratio)
-        masks.append(mask)
-    return np.array(masks)
-
-
-def mpolygons2masks_overlap(imgsz, segments, color=1, downsample_ratio=1):
-    masks = np.zeros((imgsz[0] // downsample_ratio, imgsz[1] // downsample_ratio), dtype=np.int32)
-    areas = []
-    ms = []
-    for seg in segments:
-        polygons = [np.asarray(x, dtype=np.int32) for x in seg]
-        mask = mpolygons2mask(imgsz, polygons, color=color, downsample_ratio=downsample_ratio)
-        ms.append(mask)
-        areas.append(mask.sum())
-    areas = np.asarray(areas)
-    index = np.argsort(-areas)
-    ms = np.array(ms)[index]
-    for i in range(len(segments)):
-        mask = ms[i] * (i + 1)
-        masks = masks + mask
-        masks = np.clip(masks, a_min=0, a_max=i + 1)
-    return masks, index
-
-
-def verify_image_label_mpolygon(args):
-    """Verify one image-label pair."""
-    im_file, lb_file, prefix, num_cls = args
-    # Number (missing, found, empty, corrupt), message, segments, keypoints
-    nm, nf, ne, nc, msg, segments = 0, 0, 0, 0, "", []
-    try:
-        # Verify images
-        im = Image.open(im_file)
-        im.verify()  # PIL verify
-        shape = exif_size(im)  # image size
-        shape = (shape[1], shape[0])  # hw
-        assert (shape[0] > 9) & (shape[1] > 9), f"image size {shape} <10 pixels"
-        assert im.format.lower() in IMG_FORMATS, f"invalid image format {im.format}"
-        if im.format.lower() in ("jpg", "jpeg"):
-            with open(im_file, "rb") as f:
-                f.seek(-2, 2)
-                if f.read() != b"\xff\xd9":  # corrupt JPEG
-                    ImageOps.exif_transpose(Image.open(im_file)).save(im_file, "JPEG", subsampling=0, quality=100)
-                    msg = f"{prefix}WARNING ⚠️ {im_file}: corrupt JPEG restored and saved"
-
-        # Verify labels
-        if os.path.isfile(lb_file):
-            nf = 1  # label found
-            classes = []
-            segments = []
-            bboxes = []
-            with open(lb_file) as f:
-                objs = json.load(f)
-                for obj in objs:
-                    classes.append(obj["class"])
-                    polygons = obj["polygons"]
-                    segments.append(polygons)
-                    coords = np.vstack(polygons)
-                    xs, ys = zip(*coords)
-                    x_min, y_min, x_max, y_max = min(xs), min(ys), max(xs), max(ys)
-                    cx = (x_min + x_max) / 2
-                    cy = (y_min + y_max) / 2
-                    w = x_max - x_min
-                    h = y_max - y_min
-                    bboxes.append([cx, cy, w, h])
-            classes = np.array(classes)
-            bboxes = np.array(bboxes)
-            lb = np.concatenate((classes.reshape(-1, 1), bboxes), 1)
-            lb = np.array(lb, dtype=np.float32)
-            nl = len(lb)
-            if nl:
-                assert lb.shape[1] == 5, f"labels require 5 columns, {lb.shape[1]} columns detected"
-                points = lb[:, 1:]
-                assert points.max() <= 1, f"non-normalized or out of bounds coordinates {points[points > 1]}"
-                assert lb.min() >= 0, f"negative label values {lb[lb < 0]}"
-
-                # All labels
-                max_cls = lb[:, 0].max()  # max label count
-                assert max_cls <= num_cls, (
-                    f"Label class {int(max_cls)} exceeds dataset class count {num_cls}. "
-                    f"Possible class labels are 0-{num_cls - 1}"
-                )
-                _, i = np.unique(lb, axis=0, return_index=True)
-                if len(i) < nl:  # duplicate row check
-                    lb = lb[i]  # remove duplicates
-                    if segments:
-                        segments = [segments[x] for x in i]
-                    msg = f"{prefix}WARNING ⚠️ {im_file}: {nl - len(i)} duplicate labels removed"
-            else:
-                ne = 1  # label empty
-                lb = np.zeros((0, 5), dtype=np.float32)
-        else:
-            nm = 1  # label missing
-            lb = np.zeros((0, 5), dtype=np.float32)
-        lb = lb[:, :5]
-        return im_file, lb, shape, segments, nm, nf, ne, nc, msg
-    except Exception as e:
-        nc = 1
-        msg = f"{prefix}WARNING ⚠️ {im_file}: ignoring corrupt image/label: {e}"
-        return [None, None, None, None, nm, nf, ne, nc, msg]
 
 
 def verify_image_label_with_weight(args):
