@@ -15,8 +15,8 @@ from ultralytics.utils.instance import Instances
 from ultralytics.utils.metrics import bbox_ioa
 from ultralytics.utils.ops import segment2box, xyxyxyxy2xywhr
 from ultralytics.utils.torch_utils import TORCHVISION_0_10, TORCHVISION_0_11, TORCHVISION_0_13
-
-from .utils import polygons2masks, polygons2masks_overlap, mpolygons2masks, mpolygons2masks_overlap
+from .utils import polygons2masks, polygons2masks_overlap
+from .utils import mpolygons2masks, mpolygons2masks_overlap
 
 DEFAULT_MEAN = (0.0, 0.0, 0.0)
 DEFAULT_STD = (1.0, 1.0, 1.0)
@@ -1047,7 +1047,7 @@ def classify_transforms(
 
     if isinstance(size, (tuple, list)):
         assert len(size) == 2
-        scale_size = tuple([math.floor(x / crop_fraction) for x in size])
+        scale_size = tuple(math.floor(x / crop_fraction) for x in size)
     else:
         scale_size = math.floor(size / crop_fraction)
         scale_size = (scale_size, scale_size)
