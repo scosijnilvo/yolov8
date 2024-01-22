@@ -849,7 +849,7 @@ def nms_weights(
     # Vars
     bs = prediction.shape[0]  # batch size
     nc = nc or (prediction.shape[1] - 4)  # number of classes
-    nm = prediction.shape[1] - nc - 4  # number of masks
+    nm = prediction.shape[1] - nc - 4 # mask length
     mi = 4 + nc  # mask start index
     xc = prediction[:, 4:mi].amax(1) > conf_thres  # candidates
     time_limit = 0.5 + max_time_img * bs  # seconds to quit after

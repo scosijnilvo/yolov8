@@ -11,6 +11,7 @@ from ultralytics.models.yolo.detect import DetectionValidator
 from ultralytics.utils import LOGGER, NUM_THREADS, ops
 from ultralytics.utils.checks import check_requirements
 from ultralytics.utils.metrics import SegmentMetrics, box_iou, mask_iou
+from ultralytics.utils.metrics import WeightSegmentMetrics
 from ultralytics.utils.plotting import output_to_target, plot_images
 from ultralytics.data.build import build_weight_dataset
 
@@ -275,6 +276,16 @@ class SegmentationValidator(DetectionValidator):
 
 
 class WeightSegmentationValidator(SegmentationValidator):
+    def __init__(self, dataloader=None, save_dir=None, pbar=None, args=None, _callbacks=None):
+        super().__init__(dataloader, save_dir, pbar, args, _callbacks)
+        self.metrics = WeightSegmentMetrics(save_dir=self.save_dir, on_plot=self.on_plot)
+
+    def preprocess(self, batch):
+        """Preprocesses batch by sending weights to device."""
+        batch = super().preprocess(batch)
+        batch["weights"] = batch["weights"].to(self.device)
+        return batch
+
     def postprocess(self, preds):
         """Post-processes YOLO predictions and returns output detections with proto."""
         p, w = ops.nms_weights(
@@ -294,10 +305,21 @@ class WeightSegmentationValidator(SegmentationValidator):
     def build_dataset(self, img_path, mode="val", batch=None):
         return build_weight_dataset(self.args, img_path, batch, self.data, mode=mode, stride=self.stride)
 
+    def init_metrics(self, model):
+        super().init_metrics(model)
+        self.stats = dict(
+            tp_m=[],
+            tp=[],
+            conf=[],
+            pred_cls=[],
+            target_cls=[],
+            pred_weights=[],
+            target_weights=[]
+        )
+
     def update_metrics(self, preds, batch):
         """Metrics."""
-        for si, (pred, proto, weights) in enumerate(zip(*preds)):
-            # TODO process weights
+        for si, (pred, proto, pred_weights) in enumerate(zip(*preds)):
             self.seen += 1
             npr = len(pred)
             stat = dict(
@@ -305,11 +327,13 @@ class WeightSegmentationValidator(SegmentationValidator):
                 pred_cls=torch.zeros(0, device=self.device),
                 tp=torch.zeros(npr, self.niou, dtype=torch.bool, device=self.device),
                 tp_m=torch.zeros(npr, self.niou, dtype=torch.bool, device=self.device),
+                pred_weights=torch.zeros(0, device=self.device)
             )
             pbatch = self._prepare_batch(si, batch)
-            cls, bbox = pbatch.pop("cls"), pbatch.pop("bbox")
+            cls, bbox, gt_weights = pbatch.pop("cls"), pbatch.pop("bbox"), pbatch.pop("weights")
             nl = len(cls)
             stat["target_cls"] = cls
+            stat["target_weights"] = gt_weights
             if npr == 0:
                 if nl:
                     for k in self.stats.keys():
@@ -326,6 +350,12 @@ class WeightSegmentationValidator(SegmentationValidator):
             predn, pred_masks = self._prepare_pred(pred, pbatch, proto)
             stat["conf"] = predn[:, 4]
             stat["pred_cls"] = predn[:, 5]
+            stat["pred_weights"] = pred_weights
+            #print(f'target_cls: {cls.shape}')
+            #print(f'target_weights: {gt_weights.shape}')
+            #print(f'conf: {predn[:, 4].shape}')
+            #print(f'pred_cls: {predn[:, 5].shape}')
+            #print(f'pred_weights: {pred_weights.shape}')
 
             # Evaluate
             if nl:
@@ -350,4 +380,15 @@ class WeightSegmentationValidator(SegmentationValidator):
                     pbatch["ori_shape"],
                     ratio_pad=batch["ratio_pad"][si],
                 )
-                self.pred_to_json(predn, batch["im_file"][si], pred_masks)
+                self.pred_to_json(predn, batch["im_file"][si], pred_masks, pred_weights)
+
+    def _prepare_batch(self, si, batch):
+        prepared_batch = super()._prepare_batch(si, batch)
+        idx = batch["batch_idx"] == si
+        prepared_batch["weights"] = batch["weights"][idx].squeeze(-1)
+        return prepared_batch
+
+    def pred_to_json(self, predn, filename, pred_masks, pred_weights):
+        super().pred_to_json(predn, filename, pred_masks)
+        for i, w in enumerate(pred_weights):
+            self.jdict[i]["weight"] = w
