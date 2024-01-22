@@ -12,7 +12,6 @@ from PIL import Image
 
 from ultralytics.utils import LOCAL_RANK, NUM_THREADS, TQDM, colorstr, is_dir_writeable
 from ultralytics.utils.ops import resample_segments
-
 from .augment import Compose, Format, Instances, LetterBox, classify_augmentations, classify_transforms, v8_transforms
 from .augment import WeightFormat
 from .base import BaseDataset

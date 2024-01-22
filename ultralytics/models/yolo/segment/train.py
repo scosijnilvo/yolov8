@@ -3,7 +3,8 @@
 from copy import copy
 
 from ultralytics.models import yolo
-from ultralytics.nn.tasks import SegmentationModel, WeightSegmentationModel
+from ultralytics.nn.tasks import SegmentationModel
+from ultralytics.nn.tasks import WeightSegmentationModel
 from ultralytics.utils import DEFAULT_CFG, RANK
 from ultralytics.utils.plotting import plot_images, plot_results
 from ultralytics.data import build_weight_dataset

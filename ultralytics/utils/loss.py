@@ -8,7 +8,6 @@ from ultralytics.utils.metrics import OKS_SIGMA
 from ultralytics.utils.ops import crop_mask, xywh2xyxy, xyxy2xywh
 from ultralytics.utils.tal import RotatedTaskAlignedAssigner, TaskAlignedAssigner, dist2bbox, dist2rbox, make_anchors
 from ultralytics.utils.tal import WeightTaskAlignedAssigner
-
 from .metrics import bbox_iou, probiou
 from .tal import bbox2dist
 
