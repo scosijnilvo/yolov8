@@ -617,12 +617,11 @@ def ap_per_class(
 
 
 def error_per_class(
-    tp,
-    conf,
     pred_cls,
     target_cls,
     pred_weights,
     target_weights,
+    tp_idx,
     plot=False,
     on_plot=None,
     save_dir=Path(),
@@ -630,35 +629,31 @@ def error_per_class(
     eps=1e-16,
     prefix=""
 ):
-    # Sort by objectness
-    i = np.argsort(-conf)
-    tp, conf, pred_weights = tp[i], conf[i], pred_weights[i]
-    #print(tp.shape) (61200, 10)
-
-    # Find unique classes
-    unique_classes, counts_classes = np.unique(target_cls, return_counts=True)
-    num_classes = unique_classes.shape[0]
-    num_iou = tp.shape[1]
-
+    unique_cls = np.unique(target_cls)
+    num_cls = unique_cls.shape[0]
+    
     # Calculate metrics for each class
-    r2 = np.zeros((num_classes, num_iou))
-    mae = np.zeros((num_classes, num_iou))
-    mape = np.zeros((num_classes, num_iou))
-    mse = np.zeros((num_classes, num_iou))
-    rmse = np.zeros((num_classes, num_iou))
-    for ci, c in enumerate(unique_classes):
-        i = pred_cls == c
-        print(i.shape)
-        num_labels = counts_classes[ci]
-        print(num_labels.shape)
-        num_preds = i.sum()
-        print(num_preds)
-        if num_labels == 0 or num_preds == 0:
-            continue
-        fpc = (1 - tp[i]).cumsum(0)
-        tpc = tp[i].cumsum(0)
+    mae = np.zeros(num_cls)
+    mape = np.zeros(num_cls)
+    mse = np.zeros(num_cls)
+    rmse = np.zeros(num_cls)
+    weights_dict = {c: ([], []) for c in unique_cls}
 
-    #if plot: TODO
+    for tp in tp_idx:
+        target_idx, pred_idx = tp[0], tp[1]
+        c = target_cls[target_idx]
+        assert c == pred_cls[pred_idx]
+        weights_dict[c][0].append(target_weights[target_idx])
+        weights_dict[c][1].append(pred_weights[pred_idx])
+
+    for i, c in enumerate(unique_cls):
+        y_true, y_pred = weights_dict[c] # targets, predictions
+        y_true = np.asarray(y_true)
+        y_pred = np.asarray(y_pred)
+        mae[i] = np.mean(np.abs(y_pred - y_true))
+        mape[i] = np.mean(np.abs(y_pred - y_true) / np.maximum(np.abs(y_true), eps))
+
+    return mae, mape, unique_cls.astype(int)
 
 
 class Metric(SimpleClass):
@@ -1334,11 +1329,8 @@ class OBBMetrics(SimpleClass):
 
 
 class WeightMetric(SimpleClass):
-    """TODO"""
-
     def __init__(self):
         """Initializes a WeightMetric instance for computing evaluation metrics for the model."""
-        self.all_r2 = []
         self.all_mae = []
         self.all_mape = []
         self.all_mse = []
@@ -1347,46 +1339,42 @@ class WeightMetric(SimpleClass):
         self.nc = 0 # number of classes
 
     @property
-    def r2(self):
-        """Mean of R2 for all classes."""
-        return np.mean(self.all_r2) if len(self.all_r2) else 0.0
-
-    @property
     def mae(self):
         """Mean of MAE for all classes."""
-        return np.mean(self.all_mae) if len(self.all_mae) else 0.0
+        return np.mean(self.all_mae) if len(self.all_mae) else np.nan
 
     @property
     def mape(self):
         """Mean of MAPE for all classes."""
-        return np.mean(self.all_mape) if len(self.all_mape) else 0.0
+        return np.mean(self.all_mape) if len(self.all_mape) else np.nan
 
     @property
     def mse(self):
         """Mean of MSE for all classes."""
-        return np.mean(self.all_mse) if len(self.all_mse) else 0.0
+        return np.mean(self.all_mse) if len(self.all_mse) else np.nan
 
     @property
     def rmse(self):
         """Mean of RMSE for all classes."""
-        return np.mean(self.all_rmse) if len(self.all_rmse) else 0.0
+        return np.mean(self.all_rmse) if len(self.all_rmse) else np.nan
 
     def mean_results(self):
-        return [0, 0, 0, 0, 0]
-        #return [self.r2, self.mae, self.mape, self.mse, self.rmse]
+        #return [self.mae, self.mape, self.mse, self.rmse]
+        return [self.mae, self.mape]
 
     def class_result(self, i):
-        return self.all_r2[i], self.all_mae[i], self.all_mape[i], self.all_mse[i], self.all_rmse[i]
+        #return self.all_mae[i], self.all_mape[i], self.all_mse[i], self.all_rmse[i]
+        return self.all_mae[i], self.all_mape[i]
 
     def fitness(self):
         return 0
-        #return self.r2.sum()
 
     def update(self, results):
         """
         Updates the evaluation metrics of the model with a new set of results.
         """
-        self.all_mae, self.all_mape, self.all_mse, self.all_rmse, self.class_index = results
+        #self.all_mae, self.all_mape, self.all_mse, self.all_rmse, self.class_index = results
+        self.all_mae, self.all_mape, self.class_index = results
 
 
 class WeightSegmentMetrics(SegmentMetrics):
@@ -1398,15 +1386,14 @@ class WeightSegmentMetrics(SegmentMetrics):
         super().__init__(save_dir, plot, on_plot, names)
         self.weight = WeightMetric()
 
-    def process(self, tp, tp_m, conf, pred_cls, target_cls, pred_weights, target_weights):
+    def process(self, tp, tp_m, conf, pred_cls, target_cls, pred_weights, target_weights, tp_idx):
         super().process(tp, tp_m, conf, pred_cls, target_cls)
         results_weight = error_per_class(
-            tp_m,
-            conf,
             pred_cls,
             target_cls,
             pred_weights,
             target_weights,
+            tp_idx,
             plot=self.plot,
             on_plot=self.on_plot,
             save_dir=self.save_dir,
@@ -1431,9 +1418,8 @@ class WeightSegmentMetrics(SegmentMetrics):
     @property
     def keys(self):
         keys = super().keys
-        keys.append("metrics/R2(W)")
         keys.append("metrics/MAE(W)")
         keys.append("metrics/MAPE(W)")
-        keys.append("metrics/MSE(W)")
-        keys.append("metrics/RMSE(W)")
+        #keys.append("metrics/MSE(W)")
+        #keys.append("metrics/RMSE(W)")
         return keys

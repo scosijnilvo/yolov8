@@ -280,6 +280,12 @@ class WeightSegmentationValidator(SegmentationValidator):
         super().__init__(dataloader, save_dir, pbar, args, _callbacks)
         self.metrics = WeightSegmentMetrics(save_dir=self.save_dir, on_plot=self.on_plot)
 
+    def _prepare_batch(self, si, batch):
+        prepared_batch = super()._prepare_batch(si, batch)
+        idx = batch["batch_idx"] == si
+        prepared_batch["weights"] = batch["weights"][idx].squeeze(-1)
+        return prepared_batch
+
     def preprocess(self, batch):
         """Preprocesses batch by sending weights to device."""
         batch = super().preprocess(batch)
@@ -314,7 +320,8 @@ class WeightSegmentationValidator(SegmentationValidator):
             pred_cls=[],
             target_cls=[],
             pred_weights=[],
-            target_weights=[]
+            target_weights=[],
+            tp_idx=[]
         )
 
     def update_metrics(self, preds, batch):
@@ -351,11 +358,6 @@ class WeightSegmentationValidator(SegmentationValidator):
             stat["conf"] = predn[:, 4]
             stat["pred_cls"] = predn[:, 5]
             stat["pred_weights"] = pred_weights
-            #print(f'target_cls: {cls.shape}')
-            #print(f'target_weights: {gt_weights.shape}')
-            #print(f'conf: {predn[:, 4].shape}')
-            #print(f'pred_cls: {predn[:, 5].shape}')
-            #print(f'pred_weights: {pred_weights.shape}')
 
             # Evaluate
             if nl:
@@ -363,6 +365,10 @@ class WeightSegmentationValidator(SegmentationValidator):
                 stat["tp_m"] = self._process_batch(
                     predn, bbox, cls, pred_masks, gt_masks, self.args.overlap_mask, masks=True
                 )
+                iou = box_iou(bbox, predn[:, :4])
+                correct_class = cls[:, None] == predn[:, 5]
+                iou = iou * correct_class
+                stat["tp_idx"] = torch.nonzero(iou > 0.5)
                 if self.args.plots:
                     self.confusion_matrix.process_batch(predn, bbox, cls)
 
@@ -382,13 +388,25 @@ class WeightSegmentationValidator(SegmentationValidator):
                 )
                 self.pred_to_json(predn, batch["im_file"][si], pred_masks, pred_weights)
 
-    def _prepare_batch(self, si, batch):
-        prepared_batch = super()._prepare_batch(si, batch)
-        idx = batch["batch_idx"] == si
-        prepared_batch["weights"] = batch["weights"][idx].squeeze(-1)
-        return prepared_batch
-
     def pred_to_json(self, predn, filename, pred_masks, pred_weights):
         super().pred_to_json(predn, filename, pred_masks)
         for i, w in enumerate(pred_weights):
             self.jdict[i]["weight"] = w
+
+    def get_desc(self):
+        """Return a formatted description of evaluation metrics."""
+        return ("%22s" + "%11s" * 12) % (
+            "Class",
+            "Images",
+            "Instances",
+            "Box(P",
+            "R",
+            "mAP50",
+            "mAP50-95)",
+            "Mask(P",
+            "R",
+            "mAP50",
+            "mAP50-95)",
+            "Weight(MAE",
+            "MAPE)"
+        )
