@@ -782,5 +782,5 @@ class WeightSegmentationLoss(v8SegmentationLoss):
         loss[1] *= self.hyp.box  # seg gain
         loss[2] *= self.hyp.cls  # cls gain
         loss[3] *= self.hyp.dfl  # dfl gain
-        loss[4] *= 20 # self.hyp.weight TODO add parameter
+        loss[4] *= self.hyp.wgt  # weight gain
         return loss.sum() * batch_size, loss.detach()  # loss(box, seg, cls, dfl, weight)
