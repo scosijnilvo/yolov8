@@ -334,7 +334,8 @@ class WeightSegmentationValidator(SegmentationValidator):
                 pred_cls=torch.zeros(0, device=self.device),
                 tp=torch.zeros(npr, self.niou, dtype=torch.bool, device=self.device),
                 tp_m=torch.zeros(npr, self.niou, dtype=torch.bool, device=self.device),
-                pred_weights=torch.zeros(0, device=self.device)
+                pred_weights=torch.zeros(0, device=self.device),
+                tp_idx=torch.zeros(0, device=self.device)
             )
             pbatch = self._prepare_batch(si, batch)
             cls, bbox, gt_weights = pbatch.pop("cls"), pbatch.pop("bbox"), pbatch.pop("weights")
