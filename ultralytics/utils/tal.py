@@ -306,8 +306,9 @@ class WeightTaskAlignedAssigner(TaskAlignedAssigner):
         tar_labels, tar_bboxes, tar_scores, fg_mask, tar_gt_idx = super().forward(
             pd_scores, pd_bboxes, anc_points, gt_labels, gt_bboxes, mask_gt
         )
-        tar_weights = gt_weights.flatten()[tar_gt_idx]
-        tar_weights = torch.where(fg_mask, tar_weights, 0)
+        batch_idx = torch.arange(end=self.bs, dtype=torch.int64, device=gt_labels.device)[..., None]
+        tar_idx = tar_gt_idx + batch_idx * self.n_max_boxes
+        tar_weights = gt_weights.view(-1, 1)[tar_idx]
         return tar_labels, tar_bboxes, tar_scores, tar_weights, fg_mask, tar_gt_idx
 
 

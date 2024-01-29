@@ -734,12 +734,11 @@ class WeightSegmentationLoss(v8SegmentationLoss):
         imgsz = torch.tensor(feats[0].shape[2:], device=self.device, dtype=dtype) * self.stride[0]
         anchor_points, stride_tensor = make_anchors(feats, self.stride, 0.5)
         batch_idx = batch["batch_idx"].view(-1, 1)
-        targets = torch.cat((batch_idx, batch["cls"].view(-1, 1), batch["bboxes"]), 1)
+        targets = torch.cat((batch_idx, batch["cls"].view(-1, 1), batch["bboxes"], batch["weights"].view(-1, 1)), 1)
         targets = self.preprocess(targets.to(self.device), batch_size, scale_tensor=imgsz[[1, 0, 1, 0]])
-        gt_labels, gt_bboxes = targets.split((1, 4), 2)  # cls, xyxy
+        gt_labels, gt_bboxes, gt_weights = targets.split((1, 4, 1), 2)  # cls, xyxy, weights
         mask_gt = gt_bboxes.sum(2, keepdim=True).gt_(0)
         pred_bboxes = self.bbox_decode(anchor_points, pred_distri)  # xyxy, (b, h*w, 4)
-        gt_weights = batch["weights"].to(self.device).float()
         _, target_bboxes, target_scores, target_weights, fg_mask, target_gt_idx = self.assigner(
             pred_scores.detach().sigmoid(),
             (pred_bboxes.detach() * stride_tensor).type(gt_bboxes.dtype),
@@ -750,6 +749,8 @@ class WeightSegmentationLoss(v8SegmentationLoss):
             mask_gt,
         )
         target_scores_sum = max(target_scores.sum(), 1)
+        # Cls loss
+        # loss[1] = self.varifocal_loss(pred_scores, target_scores, target_labels) / target_scores_sum  # VFL way
         loss[2] = self.bce(pred_scores, target_scores.to(dtype)).sum() / target_scores_sum # BCE
         if fg_mask.sum():
             # Bbox loss
@@ -773,7 +774,7 @@ class WeightSegmentationLoss(v8SegmentationLoss):
             # https://github.com/ultralytics/ultralytics/issues/5313
             fg_mask = fg_mask.unsqueeze(-1)
             pred_weights = pred_weights[fg_mask]
-            target_weights = target_weights.unsqueeze(-1)[fg_mask]
+            target_weights = target_weights[fg_mask]
             loss[4] = F.mse_loss(pred_weights, target_weights)
         # WARNING: lines below prevent Multi-GPU DDP 'unused gradient' PyTorch errors, do not remove
         else:
@@ -784,3 +785,20 @@ class WeightSegmentationLoss(v8SegmentationLoss):
         loss[3] *= self.hyp.dfl  # dfl gain
         loss[4] *= self.hyp.wgt  # weight gain
         return loss.sum() * batch_size, loss.detach()  # loss(box, seg, cls, dfl, weight)
+
+    def preprocess(self, targets, batch_size, scale_tensor):
+        """Preprocesses the target counts and matches with the input batch size to output a tensor."""
+        if targets.shape[0] == 0:
+            out = torch.zeros(batch_size, 0, 6, device=self.device)
+        else:
+            i = targets[:, 0]  # image index
+            _, counts = i.unique(return_counts=True)
+            counts = counts.to(dtype=torch.int32)
+            out = torch.zeros(batch_size, counts.max(), 6, device=self.device)
+            for j in range(batch_size):
+                matches = i == j
+                n = matches.sum()
+                if n:
+                    out[j, :n] = targets[matches, 1:]
+            out[..., 1:5] = xywh2xyxy(out[..., 1:5].mul_(scale_tensor))
+        return out
