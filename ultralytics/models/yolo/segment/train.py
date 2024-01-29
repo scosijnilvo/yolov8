@@ -83,3 +83,7 @@ class WeightSegmentationTrainer(SegmentationTrainer):
     def build_dataset(self, img_path, mode="train", batch=None):
         gs = max(int(de_parallel(self.model).stride.max() if self.model else 0), 32)
         return build_weight_dataset(self.args, img_path, batch, self.data, mode=mode, rect=mode == "val", stride=gs)
+
+    def plot_metrics(self):
+        """Plots training/val metrics."""
+        plot_results(file=self.csv, weight=True, on_plot=self.on_plot)  # save results.png
