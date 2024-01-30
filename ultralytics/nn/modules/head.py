@@ -441,19 +441,15 @@ class RTDETRDecoder(nn.Module):
 class WeightSegment(Segment):
     def __init__(self, nc=80, nm=32, npr=256, ch=()):
         super().__init__(nc, nm, npr, ch)
-        self.segment = Segment.forward
-        self.cv5 = nn.ModuleList(
-            nn.Sequential(
-                Conv(x, 128, 3),
-                nn.Conv2d(128, 1, 1),
-                nn.ReLU()
-            ) for x in ch
-        )
+        c4 = max(ch[0] // 4, self.nm) + 1
+        self.cv4 = nn.ModuleList(nn.Sequential(Conv(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, self.nm + 1, 1)) for x in ch)
 
     def forward(self, x):
-        bs = x[0].shape[0] # batch size
-        weight = torch.cat([self.cv5[i](x[i]).view(bs, 1, -1) for i in range(self.nl)], 2)
-        x = self.segment(self, x)
-        if self.training or self.export:
-            return *x, weight
-        return (x[0], (*x[1], weight))
+        p = self.proto(x[0])  # mask protos
+        bs = p.shape[0]  # batch size
+        mc = torch.cat([self.cv4[i](x[i]).view(bs, self.nm + 1, -1) for i in range(self.nl)], 2)  # mask coefficients
+        mc, w = mc.split((self.nm, 1), 1)
+        x = self.detect(self, x)
+        if self.training:
+            return x, mc, p, w
+        return (torch.cat([x, mc, w], 1), p) if self.export else (torch.cat([x[0], mc, w], 1), (x[1], mc, p, w))

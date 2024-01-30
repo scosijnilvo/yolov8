@@ -286,6 +286,16 @@ class WeightSegmentationValidator(SegmentationValidator):
         prepared_batch["weights"] = batch["weights"][idx].squeeze(-1)
         return prepared_batch
 
+    def _prepare_pred(self, pred, pbatch, proto):
+        """Prepares a batch for training or inference by processing images and targets."""
+        predn = pred.clone()
+        ops.scale_boxes(
+            pbatch["imgsz"], predn[:, :4], pbatch["ori_shape"], ratio_pad=pbatch["ratio_pad"]
+        )  # native-space pred
+        pred_masks = self.process(proto, pred[:, 6:-1], pred[:, :4], shape=pbatch["imgsz"])
+        pred_weights = predn[:, -1]
+        return predn, pred_masks, pred_weights
+
     def preprocess(self, batch):
         """Preprocesses batch by sending weights to device."""
         batch = super().preprocess(batch)
@@ -294,7 +304,7 @@ class WeightSegmentationValidator(SegmentationValidator):
 
     def postprocess(self, preds):
         """Post-processes YOLO predictions and returns output detections with proto."""
-        p, w = ops.nms_weights(
+        p = ops.non_max_suppression(
             preds[0],
             self.args.conf,
             self.args.iou,
@@ -303,10 +313,9 @@ class WeightSegmentationValidator(SegmentationValidator):
             agnostic=self.args.single_cls,
             max_det=self.args.max_det,
             nc=self.nc,
-            weights=preds[1][3]
         )
         proto = preds[1][2] if len(preds[1]) == 4 else preds[1]  # second output is len 4 if pt, but only 1 if exported
-        return p, proto, w
+        return p, proto
 
     def build_dataset(self, img_path, mode="val", batch=None):
         return build_weight_dataset(self.args, img_path, batch, self.data, mode=mode, stride=self.stride)
@@ -326,7 +335,7 @@ class WeightSegmentationValidator(SegmentationValidator):
 
     def update_metrics(self, preds, batch):
         """Metrics."""
-        for si, (pred, proto, pred_weights) in enumerate(zip(*preds)):
+        for si, (pred, proto) in enumerate(zip(preds[0], preds[1])):
             self.seen += 1
             npr = len(pred)
             stat = dict(
@@ -355,7 +364,7 @@ class WeightSegmentationValidator(SegmentationValidator):
             # Predictions
             if self.args.single_cls:
                 pred[:, 5] = 0
-            predn, pred_masks = self._prepare_pred(pred, pbatch, proto)
+            predn, pred_masks, pred_weights = self._prepare_pred(pred, pbatch, proto)
             stat["conf"] = predn[:, 4]
             stat["pred_cls"] = predn[:, 5]
             stat["pred_weights"] = pred_weights
