@@ -742,6 +742,7 @@ class WeightSegmentationLoss(v8SegmentationLoss):
         _, target_bboxes, target_scores, target_weights, fg_mask, target_gt_idx = self.assigner(
             pred_scores.detach().sigmoid(),
             (pred_bboxes.detach() * stride_tensor).type(gt_bboxes.dtype),
+            pred_weights.detach(),
             anchor_points * stride_tensor,
             gt_labels,
             gt_bboxes,
@@ -772,10 +773,7 @@ class WeightSegmentationLoss(v8SegmentationLoss):
             )
             # Weights loss
             # https://github.com/ultralytics/ultralytics/issues/5313
-            fg_mask = fg_mask.unsqueeze(-1)
-            pred_weights = pred_weights[fg_mask]
-            target_weights = target_weights[fg_mask]
-            loss[4] = F.mse_loss(pred_weights, target_weights)
+            loss[4] = F.mse_loss(pred_weights[fg_mask], target_weights[fg_mask])
         # WARNING: lines below prevent Multi-GPU DDP 'unused gradient' PyTorch errors, do not remove
         else:
             loss[1] += (proto * 0).sum() + (pred_masks * 0).sum()  # inf sums may lead to nan loss
