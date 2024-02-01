@@ -717,6 +717,7 @@ class WeightSegmentationLoss(v8SegmentationLoss):
         beta = self.assigner.beta
         # create new task-aligned assigner that includes ground-truth values for weights
         self.assigner = WeightTaskAlignedAssigner(topk=topk, num_classes=self.nc, alpha=alpha, beta=beta)
+        self.weights_loss = MSELoss().to(self.device)
 
     def __call__(self, preds, batch):
         """Calculate and return the loss."""
@@ -773,7 +774,7 @@ class WeightSegmentationLoss(v8SegmentationLoss):
             )
             # Weights loss
             # https://github.com/ultralytics/ultralytics/issues/5313
-            loss[4] = F.mse_loss(pred_weights[fg_mask], target_weights[fg_mask])
+            loss[4] = self.weights_loss(pred_weights, target_weights, target_scores, target_scores_sum, fg_mask)
         # WARNING: lines below prevent Multi-GPU DDP 'unused gradient' PyTorch errors, do not remove
         else:
             loss[1] += (proto * 0).sum() + (pred_masks * 0).sum()  # inf sums may lead to nan loss
@@ -800,3 +801,13 @@ class WeightSegmentationLoss(v8SegmentationLoss):
                     out[j, :n] = targets[matches, 1:]
             out[..., 1:5] = xywh2xyxy(out[..., 1:5].mul_(scale_tensor))
         return out
+
+
+class MSELoss(nn.Module):
+    """Mean squared error loss with optional weighting."""
+
+    def forward(self, pred, target, target_scores, target_scores_sum, fg_mask, weighted=False):
+        if weighted:
+            weight = target_scores.sum(-1)[fg_mask].unsqueeze(-1)
+            return (weight * (pred - target) ** 2).sum() / target_scores_sum
+        return ((pred - target) ** 2).mean()
