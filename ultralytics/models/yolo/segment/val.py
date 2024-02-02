@@ -293,8 +293,26 @@ class WeightSegmentationValidator(SegmentationValidator):
             pbatch["imgsz"], predn[:, :4], pbatch["ori_shape"], ratio_pad=pbatch["ratio_pad"]
         )  # native-space pred
         pred_masks = self.process(proto, pred[:, 6:-1], pred[:, :4], shape=pbatch["imgsz"])
-        pred_weights = predn[:, -1]
-        return predn, pred_masks, pred_weights
+        return predn, pred_masks
+
+    def _process_batch_weights(self, pred, gt_bboxes, gt_cls, gt_weights):
+        pred_weights = pred[:, -1]
+        correct_class = gt_cls[:, None] == pred[:, 5]
+        iou = box_iou(gt_bboxes, pred[:, :4])
+        iou = iou * correct_class
+        iou = iou.cpu().numpy()
+        tp_idx = np.nonzero(iou >= 0.5)
+        tp_idx = np.array(tp_idx).T
+        if tp_idx.shape[0]:
+            if tp_idx.shape[0] > 1:
+                tp_idx = tp_idx[iou[tp_idx[:, 0], tp_idx[:, 1]].argsort()[::-1]]
+                tp_idx = tp_idx[np.unique(tp_idx[:, 1], return_index=True)[1]]
+                tp_idx = tp_idx[np.unique(tp_idx[:, 0], return_index=True)[1]]
+        tp_w = []
+        for tp in tp_idx:
+            gt_idx, pred_idx = tp[0], tp[1]
+            tp_w.append([gt_weights[gt_idx], pred_weights[pred_idx], gt_cls[gt_idx]])
+        return torch.tensor(tp_w, device=pred.device)
 
     def preprocess(self, batch):
         """Preprocesses batch by sending weights to device."""
@@ -328,9 +346,7 @@ class WeightSegmentationValidator(SegmentationValidator):
             conf=[],
             pred_cls=[],
             target_cls=[],
-            pred_weights=[],
-            target_weights=[],
-            tp_idx=[]
+            tp_w=[]
         )
 
     def update_metrics(self, preds, batch):
@@ -343,14 +359,12 @@ class WeightSegmentationValidator(SegmentationValidator):
                 pred_cls=torch.zeros(0, device=self.device),
                 tp=torch.zeros(npr, self.niou, dtype=torch.bool, device=self.device),
                 tp_m=torch.zeros(npr, self.niou, dtype=torch.bool, device=self.device),
-                pred_weights=torch.zeros(0, device=self.device),
-                tp_idx=torch.zeros(0, device=self.device)
+                tp_w=torch.zeros(0, device=self.device)
             )
             pbatch = self._prepare_batch(si, batch)
-            cls, bbox, gt_weights = pbatch.pop("cls"), pbatch.pop("bbox"), pbatch.pop("weights")
+            cls, bbox, weights = pbatch.pop("cls"), pbatch.pop("bbox"), pbatch.pop("weights")
             nl = len(cls)
             stat["target_cls"] = cls
-            stat["target_weights"] = gt_weights
             if npr == 0:
                 if nl:
                     for k in self.stats.keys():
@@ -364,10 +378,9 @@ class WeightSegmentationValidator(SegmentationValidator):
             # Predictions
             if self.args.single_cls:
                 pred[:, 5] = 0
-            predn, pred_masks, pred_weights = self._prepare_pred(pred, pbatch, proto)
+            predn, pred_masks = self._prepare_pred(pred, pbatch, proto)
             stat["conf"] = predn[:, 4]
             stat["pred_cls"] = predn[:, 5]
-            stat["pred_weights"] = pred_weights
 
             # Evaluate
             if nl:
@@ -375,10 +388,7 @@ class WeightSegmentationValidator(SegmentationValidator):
                 stat["tp_m"] = self._process_batch(
                     predn, bbox, cls, pred_masks, gt_masks, self.args.overlap_mask, masks=True
                 )
-                iou = box_iou(bbox, predn[:, :4])
-                correct_class = cls[:, None] == predn[:, 5]
-                iou = iou * correct_class
-                stat["tp_idx"] = torch.nonzero(iou > 0.5)
+                stat["tp_w"] = self._process_batch_weights(predn, bbox, cls, weights)
                 if self.args.plots:
                     self.confusion_matrix.process_batch(predn, bbox, cls)
 
@@ -396,16 +406,16 @@ class WeightSegmentationValidator(SegmentationValidator):
                     pbatch["ori_shape"],
                     ratio_pad=batch["ratio_pad"][si],
                 )
-                self.pred_to_json(predn, batch["im_file"][si], pred_masks, pred_weights)
+                self.pred_to_json(predn, batch["im_file"][si], pred_masks)
 
-    def pred_to_json(self, predn, filename, pred_masks, pred_weights):
+    def pred_to_json(self, predn, filename, pred_masks):
         super().pred_to_json(predn, filename, pred_masks)
-        for i, w in enumerate(pred_weights):
-            self.jdict[i]["weight"] = w
+        for i, p in enumerate(predn):
+            self.jdict[i]["weight"] = p[:, -1]
 
     def get_desc(self):
         """Return a formatted description of evaluation metrics."""
-        return ("%22s" + "%11s" * 12) % (
+        return ("%22s" + "%11s" * 13) % (
             "Class",
             "Images",
             "Instances",
@@ -418,5 +428,6 @@ class WeightSegmentationValidator(SegmentationValidator):
             "mAP50",
             "mAP50-95)",
             "Weight(MAE",
-            "MAPE)"
+            "MAPE",
+            "RMSE)"
         )

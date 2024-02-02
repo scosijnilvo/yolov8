@@ -374,8 +374,6 @@ class Results(SimpleClass):
 
 
 class WeightResults(Results):
-    """TODO"""
-
     def __init__(self, orig_img, path, names, boxes=None, masks=None, probs=None, keypoints=None, obb=None, weights=None):
         super().__init__(orig_img, path, names, boxes, masks, probs, keypoints, obb)
         self.weights = weights
