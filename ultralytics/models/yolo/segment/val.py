@@ -301,7 +301,8 @@ class WeightSegmentationValidator(SegmentationValidator):
 
     def _process_batch_weights(self, pred, gt_bboxes, gt_cls, gt_weights):
         pred_weights = pred[:, -1]
-        correct_class = gt_cls[:, None] == pred[:, 5]
+        pred_cls = pred[:, 5]
+        correct_class = gt_cls[:, None] == pred_cls
         iou = box_iou(gt_bboxes, pred[:, :4])
         iou = iou * correct_class
         iou = iou.cpu().numpy()
@@ -315,7 +316,7 @@ class WeightSegmentationValidator(SegmentationValidator):
         tp_w = []
         for tp in tp_idx:
             gt_idx, pred_idx = tp[0], tp[1]
-            tp_w.append([gt_weights[gt_idx], pred_weights[pred_idx], gt_cls[gt_idx]])
+            tp_w.append([gt_weights[gt_idx], pred_weights[pred_idx], pred_cls[pred_idx]])
         return torch.tensor(tp_w, device=pred.device)
 
     def preprocess(self, batch):

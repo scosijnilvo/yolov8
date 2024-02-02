@@ -620,6 +620,7 @@ def ap_per_class(
 
 
 def error_per_class(
+    target_cls,
     tp_w,
     plot=False,
     on_plot=None,
@@ -628,13 +629,13 @@ def error_per_class(
     eps=1e-16,
     prefix=""
 ):
-    unique_cls = np.unique(tp_w[:, 2])
+    unique_cls = np.unique(target_cls)
     num_cls = unique_cls.shape[0]
 
     # Calculate metrics for each class
-    mae = np.zeros(num_cls)
-    mape = np.zeros(num_cls)
-    rmse = np.zeros(num_cls)
+    mae = np.full(num_cls, np.nan)
+    mape = np.full(num_cls, np.nan)
+    rmse = np.full(num_cls, np.nan)
     weights_dict = {c: ([], []) for c in unique_cls}
 
     for tp in tp_w:
@@ -646,9 +647,10 @@ def error_per_class(
         y_true, y_pred = weights_dict[c] # targets, predictions
         y_true = np.asarray(y_true)
         y_pred = np.asarray(y_pred)
-        mae[i] = np.mean(np.abs(y_pred - y_true))
-        mape[i] = np.mean(np.abs(y_pred - y_true) / np.maximum(np.abs(y_true), eps))
-        rmse[i] = np.sqrt(np.mean((y_pred - y_true) ** 2))
+        if y_pred.size > 0:
+            mae[i] = np.mean(np.abs(y_pred - y_true))
+            mape[i] = np.mean(np.abs(y_pred - y_true) / np.maximum(np.abs(y_true), eps))
+            rmse[i] = np.sqrt(np.mean((y_pred - y_true) ** 2))
 
     # TODO: plot
 
@@ -1339,17 +1341,17 @@ class WeightMetric(SimpleClass):
     @property
     def mae(self):
         """Mean of MAE for all classes."""
-        return np.mean(self.all_mae) if len(self.all_mae) else np.nan
+        return np.nanmean(self.all_mae) if len(self.all_mae) else np.nan
 
     @property
     def mape(self):
         """Mean of MAPE for all classes."""
-        return np.mean(self.all_mape) if len(self.all_mape) else np.nan
+        return np.nanmean(self.all_mape) if len(self.all_mape) else np.nan
 
     @property
     def rmse(self):
         """Mean of RMSE for all classes."""
-        return np.mean(self.all_rmse) if len(self.all_rmse) else np.nan
+        return np.nanmean(self.all_rmse) if len(self.all_rmse) else np.nan
 
     def mean_results(self):
         return [self.mae, self.mape, self.rmse]
@@ -1381,6 +1383,7 @@ class WeightSegmentMetrics(SegmentMetrics):
     def process(self, tp, tp_m, conf, pred_cls, target_cls, tp_w):
         super().process(tp, tp_m, conf, pred_cls, target_cls)
         results_weight = error_per_class(
+            target_cls,
             tp_w,
             plot=self.plot,
             on_plot=self.on_plot,
