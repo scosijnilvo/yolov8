@@ -701,6 +701,7 @@ def plot_images(
     on_plot=None,
     max_subplots=16,
     save=True,
+    weights=np.zeros(0, dtype=np.float32)
 ):
     """Plot image grid with labels."""
     if isinstance(images, torch.Tensor):
@@ -715,6 +716,8 @@ def plot_images(
         kpts = kpts.cpu().numpy()
     if isinstance(batch_idx, torch.Tensor):
         batch_idx = batch_idx.cpu().numpy()
+    if isinstance(weights, torch.Tensor):
+        weights = weights.cpu().numpy()
 
     max_size = 1920  # max image size
     bs, _, h, w = images.shape  # batch size, _, height, width
@@ -762,12 +765,15 @@ def plot_images(
                         boxes[..., :4] *= scale
                 boxes[..., 0::2] += x
                 boxes[..., 1::2] += y
+                wgts = weights[idx] if len(weights) else None
                 for j, box in enumerate(boxes.astype(np.int64).tolist()):
                     c = classes[j]
                     color = colors(c)
                     c = names.get(c, c) if names else c
                     if labels or conf[j] > 0.25:  # 0.25 conf thresh
                         label = f"{c}" if labels else f"{c} {conf[j]:.1f}"
+                        if wgts is not None:
+                            label = f"{c} {wgts[j]:.2f}" if labels else f"{c} {conf[j]:.1f} {wgts[j]:.2f}"
                         annotator.box_label(box, label, color=color, rotated=is_obb)
 
             elif len(classes):

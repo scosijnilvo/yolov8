@@ -282,7 +282,10 @@ class SegmentationValidator(DetectionValidator):
 class WeightSegmentationValidator(SegmentationValidator):
     def __init__(self, dataloader=None, save_dir=None, pbar=None, args=None, _callbacks=None):
         super().__init__(dataloader, save_dir, pbar, args, _callbacks)
-        self.metrics = WeightSegmentMetrics(save_dir=self.save_dir, on_plot=self.on_plot, weight_fitness=args.weight_fitness)
+        weight_fitness = False
+        if "weight_fitness" in args:
+            weight_fitness = args.weight_fitness
+        self.metrics = WeightSegmentMetrics(save_dir=self.save_dir, on_plot=self.on_plot, weight_fitness=weight_fitness)
 
     def _prepare_batch(self, si, batch):
         prepared_batch = super()._prepare_batch(si, batch)
@@ -436,3 +439,36 @@ class WeightSegmentationValidator(SegmentationValidator):
             "MAPE",
             "RMSE)"
         )
+
+    def plot_val_samples(self, batch, ni):
+        """Plots validation samples with bounding box labels and weights."""
+        plot_images(
+            batch["img"],
+            batch["batch_idx"],
+            batch["cls"].squeeze(-1),
+            batch["bboxes"],
+            masks=batch["masks"],
+            paths=batch["im_file"],
+            fname=self.save_dir / f"val_batch{ni}_labels.jpg",
+            names=self.names,
+            on_plot=self.on_plot,
+            weights=batch["weights"].squeeze(-1)
+        )
+
+    def plot_predictions(self, batch, preds, ni):
+        """Plots batch predictions with masks, bounding boxes, and weights."""
+        weights = []
+        for p in preds[0]:
+            weights.append(p[:15, -1].cpu())
+        weights = torch.cat(weights, 0).numpy()
+        plot_images(
+            batch["img"],
+            *output_to_target(preds[0], max_det=15),  # not set to self.args.max_det due to slow plotting speed
+            torch.cat(self.plot_masks, dim=0) if len(self.plot_masks) else self.plot_masks,
+            paths=batch["im_file"],
+            fname=self.save_dir / f"val_batch{ni}_pred.jpg",
+            names=self.names,
+            on_plot=self.on_plot,
+            weights=weights
+        )  # pred
+        self.plot_masks.clear()
