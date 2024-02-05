@@ -1376,9 +1376,10 @@ class WeightSegmentMetrics(SegmentMetrics):
     Calculates and aggregates detection, segmentation, and weight metrics over a given set of classes.
     """
 
-    def __init__(self, save_dir=Path("."), plot=False, on_plot=None, names=()) -> None:
+    def __init__(self, save_dir=Path("."), plot=False, on_plot=None, names=(), weight_fitness=False) -> None:
         super().__init__(save_dir, plot, on_plot, names)
         self.weight = WeightMetric()
+        self.weight_fitness = weight_fitness
 
     def process(self, tp, tp_m, conf, pred_cls, target_cls, tp_w):
         super().process(tp, tp_m, conf, pred_cls, target_cls)
@@ -1404,7 +1405,9 @@ class WeightSegmentMetrics(SegmentMetrics):
 
     @property
     def fitness(self):
-        return self.box.fitness() + self.seg.fitness() #+ self.weight.fitness()
+        if self.weight_fitness:
+            return self.box.fitness() + self.seg.fitness() + self.weight.fitness()
+        return self.box.fitness() + self.seg.fitness()
 
     @property
     def keys(self):

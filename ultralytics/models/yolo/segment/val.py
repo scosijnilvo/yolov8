@@ -282,7 +282,7 @@ class SegmentationValidator(DetectionValidator):
 class WeightSegmentationValidator(SegmentationValidator):
     def __init__(self, dataloader=None, save_dir=None, pbar=None, args=None, _callbacks=None):
         super().__init__(dataloader, save_dir, pbar, args, _callbacks)
-        self.metrics = WeightSegmentMetrics(save_dir=self.save_dir, on_plot=self.on_plot)
+        self.metrics = WeightSegmentMetrics(save_dir=self.save_dir, on_plot=self.on_plot, weight_fitness=args.weight_fitness)
 
     def _prepare_batch(self, si, batch):
         prepared_batch = super()._prepare_batch(si, batch)

@@ -857,9 +857,12 @@ def plot_results(file="path/to/results.csv", dir="", segment=False, pose=False, 
     elif segment:
         fig, ax = plt.subplots(2, 8, figsize=(18, 6), tight_layout=True)
         index = [1, 2, 3, 4, 5, 6, 9, 10, 13, 14, 15, 16, 7, 8, 11, 12]
-    elif pose or weight:
+    elif pose:
         fig, ax = plt.subplots(2, 9, figsize=(21, 6), tight_layout=True)
         index = [1, 2, 3, 4, 5, 6, 7, 10, 11, 14, 15, 16, 17, 18, 8, 9, 12, 13]
+    elif weight:
+        fig, ax = plt.subplots(3, 7, figsize=(15, 9), tight_layout=True)
+        index = list(range(1, 22))
     else:
         fig, ax = plt.subplots(2, 5, figsize=(12, 6), tight_layout=True)
         index = [1, 2, 3, 4, 5, 8, 9, 10, 6, 7]
