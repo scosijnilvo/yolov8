@@ -1341,17 +1341,23 @@ class WeightMetric(SimpleClass):
     @property
     def mae(self):
         """Mean of MAE for all classes."""
-        return np.nanmean(self.all_mae) if len(self.all_mae) else np.nan
+        if np.isnan(self.all_mae).all():
+            return np.nan
+        return np.nanmean(self.all_mae)
 
     @property
     def mape(self):
         """Mean of MAPE for all classes."""
-        return np.nanmean(self.all_mape) if len(self.all_mape) else np.nan
+        if np.isnan(self.all_mape).all():
+            return np.nan
+        return np.nanmean(self.all_mape)
 
     @property
     def rmse(self):
         """Mean of RMSE for all classes."""
-        return np.nanmean(self.all_rmse) if len(self.all_rmse) else np.nan
+        if np.isnan(self.all_rmse).all():
+            return np.nan
+        return np.nanmean(self.all_rmse)
 
     def mean_results(self):
         return [self.mae, self.mape, self.rmse]
