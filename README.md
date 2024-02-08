@@ -39,32 +39,18 @@ names:
 Each image must have a corresponding label file with the same name and ```.txt``` extension located at ```dataset/labels/[train|val|test]```.
 The label files consist of one row for each object in the image with the following format:
 ```
-<class-index> <weight> <x1> <y1> <x2> <y2> ... <xn> <yn>
+<class-index> <weight> <x1> <y1> ... <xn> <yn>
 ```
 where
 - ```<class-index>``` = index of the class declared in the ```.yaml``` file
 - ```<weight>``` = weight of the object
-- ```<x1> <y1> <x2> <y2> ... <xn> <yn>``` = bounding coordinates of the segmentation mask, normalized between 0 and 1
+- ```<x1> <y1> ... <xn> <yn>``` = bounding coordinates of the segmentation mask, normalized between 0 and 1
 
 ### Training
 ```python
-from ultralytics import YOLO
-from ultralytics.nn.tasks import WeightSegmentationModel
-from ultralytics.models.yolo.segment import WeightSegmentationTrainer, WeightSegmentationPredictor, WeightSegmentationValidator
+from ultralytics.models import WeightModel
 
-class MyModel(YOLO):
-    @property
-    def task_map(self):
-        return {
-            'segment': {
-                'model': WeightSegmentationModel,
-                'trainer': WeightSegmentationTrainer,
-                'validator': WeightSegmentationValidator,
-                'predictor': WeightSegmentationPredictor
-            }
-        }
-
-model = MyModel('yolov8n-weight-seg.yaml', task='segment')
+model = WeightModel('yolov8n-weight-seg.yaml')
 results = model.train(data='dataset.yaml', epochs=100)
 ```
 
