@@ -303,13 +303,15 @@ class WeightSegmentationValidator(SegmentationValidator):
         return predn, pred_masks
 
     def _process_batch_weights(self, pred, gt_bboxes, gt_cls, gt_weights):
+        conf = 0.25 if self.args.conf in (None, 0.001) else self.args.conf
+        pred = pred[pred[:, 4] > conf]
         pred_weights = pred[:, -1]
         pred_cls = pred[:, 5]
         correct_class = gt_cls[:, None] == pred_cls
         iou = box_iou(gt_bboxes, pred[:, :4])
         iou = iou * correct_class
         iou = iou.cpu().numpy()
-        tp_idx = np.nonzero(iou >= 0.5)
+        tp_idx = np.nonzero(iou > 0.45)
         tp_idx = np.array(tp_idx).T
         if tp_idx.shape[0]:
             if tp_idx.shape[0] > 1:
