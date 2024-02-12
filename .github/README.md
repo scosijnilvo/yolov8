@@ -36,13 +36,22 @@ names:
 ```
 
 Each image must have a corresponding label file with the same name and ```.txt``` extension located at ```dataset/labels/[train|val|test]```.
-The label files consist of one row for each object in the image with the following format:
+The label files consist of one row for each object in the image with the following format.
+
+For detection:
+```
+<class-index> <weight> <x> <y> <w> <h>
+```
+
+For segmentation:
 ```
 <class-index> <weight> <x1> <y1> ... <xn> <yn>
 ```
+
 where
 - ```<class-index>``` = index of the class declared in the ```.yaml``` file
 - ```<weight>``` = weight of the object
+- ```<x> <y> <w> <h>``` = bounding box coordinates in xywh-format, normalized between 0 and 1
 - ```<x1> <y1> ... <xn> <yn>``` = bounding coordinates of the segmentation mask, normalized between 0 and 1
 
 ## Example code
@@ -50,11 +59,15 @@ where
 # import
 from ultralytics.models import WeightModel
 
-# training on your dataset
-model = WeightModel('yolov8n-weight-seg.yaml')
+# training a detection model
+model = WeightModel('yolov8n-weight.yaml', task='detect')
+results = model.train(data='dataset.yaml', epochs=100)
+
+# training a segmentation model
+model = WeightModel('yolov8n-weight-seg.yaml', task='segment')
 results = model.train(data='dataset.yaml', epochs=100)
 
 # loading + evaluating on test set
-model = WeightModel('saved_model.pt')
+model = WeightModel('saved_model.pt', task='segment')
 metrics = model.val(split='test')
 ```
