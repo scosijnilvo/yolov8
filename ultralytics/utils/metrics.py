@@ -1377,12 +1377,59 @@ class WeightMetric(SimpleClass):
         self.all_mae, self.all_mape, self.all_rmse, self.class_index = results
 
 
+class WeightDetMetrics(DetMetrics):
+    """
+    Calculates and aggregates detection and weight metrics over a given set of classes.
+    """
+
+    def __init__(self, save_dir=Path("."), plot=False, on_plot=None, names=(), weight_fitness=False):
+        super().__init__(save_dir, plot, on_plot, names)
+        self.weight = WeightMetric()
+        self.weight_fitness = weight_fitness
+    
+    def process(self, tp, conf, pred_cls, target_cls, tp_w):
+        super().process(tp, conf, pred_cls, target_cls)
+        results_weight = error_per_class(
+            target_cls,
+            tp_w,
+            plot=self.plot,
+            on_plot=self.on_plot,
+            save_dir=self.save_dir,
+            names=self.names,
+            prefix="Weight"
+        )
+        self.weight.nc = len(self.names)
+        self.weight.update(results_weight)
+
+    def mean_results(self):
+        """Return the mean results of box and weight."""
+        return self.box.mean_results() + self.weight.mean_results()
+
+    def class_result(self, i):
+        """Return the class-wise results for a specific class i."""
+        return self.box.class_result(i) + self.weight.class_result(i)
+
+    @property
+    def fitness(self):
+        if self.weight_fitness:
+            return self.box.fitness() + self.weight.fitness()
+        return self.box.fitness()
+
+    @property
+    def keys(self):
+        keys = super().keys
+        keys.append("metrics/MAE(W)")
+        keys.append("metrics/MAPE(W)")
+        keys.append("metrics/RMSE(W)")
+        return keys
+
+
 class WeightSegmentMetrics(SegmentMetrics):
     """
     Calculates and aggregates detection, segmentation, and weight metrics over a given set of classes.
     """
 
-    def __init__(self, save_dir=Path("."), plot=False, on_plot=None, names=(), weight_fitness=False) -> None:
+    def __init__(self, save_dir=Path("."), plot=False, on_plot=None, names=(), weight_fitness=False):
         super().__init__(save_dir, plot, on_plot, names)
         self.weight = WeightMetric()
         self.weight_fitness = weight_fitness

@@ -711,11 +711,9 @@ class v8OBBLoss(v8DetectionLoss):
         return torch.cat((dist2rbox(pred_dist, pred_angle, anchor_points), pred_angle), dim=-1)
 
 
-class WeightSegmentationLoss(v8SegmentationLoss):
-    """Criterion class for computing training losses."""
-
+class WeightLoss():
     def __init__(self, model):
-        """Initializes the WeightSegmentationLoss class, taking a de-paralleled model as argument."""
+        """Initializes the class, taking a de-paralleled model as argument."""
         super().__init__(model)
         topk = self.assigner.topk
         alpha = self.assigner.alpha
@@ -723,6 +721,84 @@ class WeightSegmentationLoss(v8SegmentationLoss):
         # create new task-aligned assigner that includes ground-truth values for weights
         self.assigner = WeightTaskAlignedAssigner(topk=topk, num_classes=self.nc, alpha=alpha, beta=beta)
         self.weighted_mse_loss = WeightedMSELoss().to(self.device)
+
+    def preprocess(self, targets, batch_size, scale_tensor):
+        """Preprocesses the target counts and matches with the input batch size to output a tensor."""
+        if targets.shape[0] == 0:
+            out = torch.zeros(batch_size, 0, 6, device=self.device)
+        else:
+            i = targets[:, 0]  # image index
+            _, counts = i.unique(return_counts=True)
+            counts = counts.to(dtype=torch.int32)
+            out = torch.zeros(batch_size, counts.max(), 6, device=self.device)
+            for j in range(batch_size):
+                matches = i == j
+                n = matches.sum()
+                if n:
+                    out[j, :n] = targets[matches, 1:]
+            out[..., 1:5] = xywh2xyxy(out[..., 1:5].mul_(scale_tensor))
+        return out
+
+
+class WeightDetectionLoss(WeightLoss, v8DetectionLoss):
+    """Criterion class for computing training losses."""
+
+    def __call__(self, preds, batch):
+        loss = torch.zeros(4, device=self.device)  # box, cls, dfl, weight
+        feats, pred_weights = preds if isinstance(preds[0], list) else preds[1]
+        batch_size = pred_weights.shape[0]
+        pred_distri, pred_scores = torch.cat([xi.view(feats[0].shape[0], self.no, -1) for xi in feats], 2).split(
+            (self.reg_max * 4, self.nc), 1
+        )
+        pred_scores = pred_scores.permute(0, 2, 1).contiguous()
+        pred_distri = pred_distri.permute(0, 2, 1).contiguous()
+        pred_weights = pred_weights.permute(0, 2, 1).contiguous()
+        dtype = pred_scores.dtype
+        imgsz = torch.tensor(feats[0].shape[2:], device=self.device, dtype=dtype) * self.stride[0]
+        anchor_points, stride_tensor = make_anchors(feats, self.stride, 0.5)
+        targets = torch.cat((batch["batch_idx"].view(-1, 1), batch["cls"].view(-1, 1), batch["bboxes"], batch["weights"].view(-1, 1)), 1)
+        targets = self.preprocess(targets.to(self.device), batch_size, scale_tensor=imgsz[[1, 0, 1, 0]])
+        gt_labels, gt_bboxes, gt_weights = targets.split((1, 4, 1), 2)  # cls, xyxy, weights
+        mask_gt = gt_bboxes.sum(2, keepdim=True).gt_(0)
+        pred_bboxes = self.bbox_decode(anchor_points, pred_distri)  # xyxy, (b, h*w, 4)
+        _, target_bboxes, target_scores, target_weights, fg_mask, _ = self.assigner(
+            pred_scores.detach().sigmoid(),
+            (pred_bboxes.detach() * stride_tensor).type(gt_bboxes.dtype),
+            pred_weights.detach(),
+            anchor_points * stride_tensor,
+            gt_labels,
+            gt_bboxes,
+            gt_weights,
+            mask_gt,
+        )
+        target_scores_sum = max(target_scores.sum(), 1)
+        # Cls loss
+        loss[1] = self.bce(pred_scores, target_scores.to(dtype)).sum() / target_scores_sum # BCE
+        if fg_mask.sum():
+            # Bbox loss
+            loss[0], loss[2] = self.bbox_loss(
+                pred_distri,
+                pred_bboxes,
+                anchor_points,
+                target_bboxes / stride_tensor,
+                target_scores,
+                target_scores_sum,
+                fg_mask,
+            )
+            # Weights loss
+            if self.hyp.weighted_loss:
+                loss[3] = self.weighted_mse_loss(pred_weights, target_weights, target_scores, target_scores_sum, fg_mask)
+            else:
+                loss[3] = F.mse_loss(pred_weights[fg_mask], target_weights[fg_mask])
+        loss[0] *= self.hyp.box  # box gain
+        loss[1] *= self.hyp.cls  # cls gain
+        loss[2] *= self.hyp.dfl  # dfl gain
+        loss[3] *= self.hyp.wgt  # weight gain
+        return loss.sum() * batch_size, loss.detach()  # loss(box, cls, dfl, weight)
+
+
+class WeightSegmentationLoss(WeightLoss, v8SegmentationLoss):
+    """Criterion class for computing training losses."""
 
     def __call__(self, preds, batch):
         """Calculate and return the loss."""
@@ -757,7 +833,6 @@ class WeightSegmentationLoss(v8SegmentationLoss):
         )
         target_scores_sum = max(target_scores.sum(), 1)
         # Cls loss
-        # loss[1] = self.varifocal_loss(pred_scores, target_scores, target_labels) / target_scores_sum  # VFL way
         loss[2] = self.bce(pred_scores, target_scores.to(dtype)).sum() / target_scores_sum # BCE
         if fg_mask.sum():
             # Bbox loss
@@ -778,7 +853,6 @@ class WeightSegmentationLoss(v8SegmentationLoss):
                 fg_mask, masks, target_gt_idx, target_bboxes, batch_idx, proto, pred_masks, imgsz, self.overlap
             )
             # Weights loss
-            # https://github.com/ultralytics/ultralytics/issues/5313
             if self.hyp.weighted_loss:
                 loss[4] = self.weighted_mse_loss(pred_weights, target_weights, target_scores, target_scores_sum, fg_mask)
             else:
@@ -792,23 +866,6 @@ class WeightSegmentationLoss(v8SegmentationLoss):
         loss[3] *= self.hyp.dfl  # dfl gain
         loss[4] *= self.hyp.wgt  # weight gain
         return loss.sum() * batch_size, loss.detach()  # loss(box, seg, cls, dfl, weight)
-
-    def preprocess(self, targets, batch_size, scale_tensor):
-        """Preprocesses the target counts and matches with the input batch size to output a tensor."""
-        if targets.shape[0] == 0:
-            out = torch.zeros(batch_size, 0, 6, device=self.device)
-        else:
-            i = targets[:, 0]  # image index
-            _, counts = i.unique(return_counts=True)
-            counts = counts.to(dtype=torch.int32)
-            out = torch.zeros(batch_size, counts.max(), 6, device=self.device)
-            for j in range(batch_size):
-                matches = i == j
-                n = matches.sum()
-                if n:
-                    out[j, :n] = targets[matches, 1:]
-            out[..., 1:5] = xywh2xyxy(out[..., 1:5].mul_(scale_tensor))
-        return out
 
 
 class WeightedMSELoss(nn.Module):

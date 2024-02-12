@@ -1,24 +1,28 @@
-from pathlib import Path
-from typing import Union
 from ultralytics.engine.model import Model
-from ultralytics.models import yolo
-from ultralytics.nn.tasks import WeightSegmentationModel
+from ultralytics.models import weight
+from ultralytics.nn.tasks import WeightDetectionModel, WeightSegmentationModel
 
 
 class WeightModel(Model):
     """Object detection and segmentation model with weight prediction."""
 
-    def __init__(self, model, verbose=False):
-        super().__init__(model, task="segment", verbose=verbose)
+    def __init__(self, model, task, verbose=False):
+        super().__init__(model, task=task, verbose=verbose)
 
     @property
     def task_map(self):
         """Map head to model, trainer, validator, and predictor classes."""
         return {
+            "detect": {
+                'model': WeightDetectionModel,
+                'trainer': weight.WeightDetectionTrainer,
+                'validator': weight.WeightDetectionValidator,
+                'predictor': weight.WeightDetectionPredictor,
+            },
             "segment": {
                 'model': WeightSegmentationModel,
-                'trainer': yolo.segment.WeightSegmentationTrainer,
-                'validator': yolo.segment.WeightSegmentationValidator,
-                'predictor': yolo.segment.WeightSegmentationPredictor,
+                'trainer': weight.WeightSegmentationTrainer,
+                'validator': weight.WeightSegmentationValidator,
+                'predictor': weight.WeightSegmentationPredictor,
             },
         }

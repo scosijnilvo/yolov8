@@ -439,6 +439,22 @@ class RTDETRDecoder(nn.Module):
             xavier_uniform_(layer[0].weight)
 
 
+class WeightDetect(Detect):
+    def __init__(self, nc=80, ch=()):
+        super().__init__(nc, ch)
+        self.detect = Detect.forward
+        c4 = ch[0] // 4
+        self.cv4 = nn.ModuleList(nn.Sequential(Conv(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, 1, 1)) for x in ch)
+
+    def forward(self, x):
+        bs = x[0].shape[0]
+        w = torch.cat([self.cv4[i](x[i]).view(bs, 1, -1) for i in range(self.nl)], 2)
+        x = self.detect(self, x)
+        if self.training:
+            return x, w
+        return torch.cat([x, w], 1) if self.export else (torch.cat([x[0], w], 1), (x[1], w))
+
+
 class WeightSegment(Segment):
     def __init__(self, nc=80, nm=32, npr=256, ch=()):
         super().__init__(nc, nm, npr, ch)

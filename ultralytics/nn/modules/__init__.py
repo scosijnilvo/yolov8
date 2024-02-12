@@ -53,7 +53,7 @@ from .conv import (
     SpatialAttention,
 )
 from .head import OBB, Classify, Detect, Pose, RTDETRDecoder, Segment
-from .head import WeightSegment
+from .head import WeightDetect, WeightSegment
 from .transformer import (
     AIFI,
     MLP,
@@ -115,5 +115,6 @@ __all__ = (
     "MLP",
     "ResNetLayer",
     "OBB",
+    "WeightDetect",
     "WeightSegment",
 )
