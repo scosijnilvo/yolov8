@@ -388,7 +388,7 @@ class WeightResults(Results):
 
     def new(self):
         """Return a new WeightResults object with the same image, path, and names."""
-        return Results(orig_img=self.orig_img, path=self.path, names=self.names)
+        return WeightResults(orig_img=self.orig_img, path=self.path, names=self.names)
 
 
 class Boxes(BaseTensor):
