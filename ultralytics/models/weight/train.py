@@ -8,12 +8,17 @@ from ultralytics.utils.torch_utils import de_parallel
 
 
 class WeightTrainer():
+    """A mixin class with shared methods for `WeightDetectionTrainer` and `WeightSegmentationTrainer`."""
+
     def build_dataset(self, img_path, mode="train", batch=None):
+        """Build a `WeightDataset` in train mode."""
         gs = max(int(de_parallel(self.model).stride.max() if self.model else 0), 32)
         return build_weight_dataset(self.args, img_path, batch, self.data, mode=mode, rect=mode == "val", stride=gs)
 
 
 class WeightDetectionTrainer(WeightTrainer, yolo.detect.DetectionTrainer):
+    """Extends `DetectionTrainer` with a custom model and validator."""
+
     def get_model(self, cfg=None, weights=None, verbose=True):
         """Return WeightDetectionModel initialized with specified config and weights."""
         model = WeightDetectionModel(cfg, ch=3, nc=self.data["nc"], verbose=verbose and RANK == -1)
@@ -34,6 +39,8 @@ class WeightDetectionTrainer(WeightTrainer, yolo.detect.DetectionTrainer):
 
 
 class WeightSegmentationTrainer(WeightTrainer, yolo.segment.SegmentationTrainer):
+    """Extends `SegmentationTrainer` with a custom model and validator."""
+
     def get_model(self, cfg=None, weights=None, verbose=True):
         """Return WeightSegmentationModel initialized with specified config and weights."""
         model = WeightSegmentationModel(cfg, ch=3, nc=self.data["nc"], verbose=verbose and RANK == -1)

@@ -378,6 +378,12 @@ class SemanticDataset(BaseDataset):
 
 
 class WeightDataset(YOLODataset):
+    """
+    Extends `YOLODataset`.
+    Dataset class for loading detection/segmentation labels in YOLO format.
+    Includes one additional value for object weight.
+    """
+
     def cache_labels(self, path=Path("./labels.cache")):
         """
         Cache dataset labels, check images and read shapes.

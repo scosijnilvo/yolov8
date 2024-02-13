@@ -10,13 +10,20 @@ from ultralytics.data.build import build_weight_dataset
 
 
 class WeightValidator():
+    """A mixin class with shared methods for `WeightDetectionValidator` and `WeightSegmentationValidator`."""
+
     def _prepare_batch(self, si, batch):
+        """Prepares a batch of images and annotations for validation."""
         prepared_batch = super()._prepare_batch(si, batch)
         idx = batch["batch_idx"] == si
         prepared_batch["weights"] = batch["weights"][idx].squeeze(-1)
         return prepared_batch
 
     def _process_batch_weights(self, pred, gt_bboxes, gt_cls, gt_weights):
+        """
+        Process weights in a batch of predictions.
+        Returns ground-truth weights, predicted weights, and predicted classes for true positive detections in the batch.
+        """
         conf = 0.25 if self.args.conf in (None, 0.001) else self.args.conf
         pred = pred[pred[:, 4] > conf]
         pred_weights = pred[:, -1]
@@ -45,11 +52,15 @@ class WeightValidator():
         return batch
 
     def build_dataset(self, img_path, mode="val", batch=None):
+        """Build a `WeightDataset` in val mode."""
         return build_weight_dataset(self.args, img_path, batch, self.data, mode=mode, stride=self.stride)
 
 
 class WeightDetectionValidator(WeightValidator, DetectionValidator):
+    """Extends `DetectionValidator` with a custom metrics class to calculate metrics of predicted object weights."""
+
     def __init__(self, dataloader=None, save_dir=None, pbar=None, args=None, _callbacks=None):
+        """Initialize the validator with `WeightDetMetrics`."""
         super().__init__(dataloader, save_dir, pbar, args, _callbacks)
         weight_fitness = args.weight_fitness if "weight_fitness" in args else False
         self.metrics = WeightDetMetrics(save_dir=self.save_dir, on_plot=self.on_plot, weight_fitness=weight_fitness)
@@ -68,6 +79,7 @@ class WeightDetectionValidator(WeightValidator, DetectionValidator):
         )
     
     def init_metrics(self, model):
+        """Initialize evaluation metrics for detections and weights."""
         super().init_metrics(model)
         self.stats = dict(
             tp=[],
@@ -78,7 +90,7 @@ class WeightDetectionValidator(WeightValidator, DetectionValidator):
         )
 
     def update_metrics(self, preds, batch):
-        """Metrics."""
+        """Update metrics with values from predictions and batch."""
         for si, pred in enumerate(preds):
             self.seen += 1
             npr = len(pred)
@@ -121,6 +133,7 @@ class WeightDetectionValidator(WeightValidator, DetectionValidator):
                 self.pred_to_json(predn, batch["im_file"][si])
 
     def pred_to_json(self, predn, filename):
+        """Serialize predictions to json."""
         super().pred_to_json(predn, filename)
         for i, p in enumerate(predn):
             self.jdict[i]["weight"] = p[:, -1]
@@ -172,7 +185,10 @@ class WeightDetectionValidator(WeightValidator, DetectionValidator):
 
 
 class WeightSegmentationValidator(WeightValidator, SegmentationValidator):
+    """Extends `SegmentationValidator` with a custom metrics class to calculate metrics of predicted object weights."""
+    
     def __init__(self, dataloader=None, save_dir=None, pbar=None, args=None, _callbacks=None):
+        """Initialize the validator with `WeightSegmentMetrics`."""
         super().__init__(dataloader, save_dir, pbar, args, _callbacks)
         weight_fitness = args.weight_fitness if "weight_fitness" in args else False
         self.metrics = WeightSegmentMetrics(save_dir=self.save_dir, on_plot=self.on_plot, weight_fitness=weight_fitness)
@@ -187,7 +203,7 @@ class WeightSegmentationValidator(WeightValidator, SegmentationValidator):
         return predn, pred_masks
 
     def postprocess(self, preds):
-        """Post-processes YOLO predictions and returns output detections with proto."""
+        """Post-processes predictions and returns output detections with proto."""
         p = ops.non_max_suppression(
             preds[0],
             self.args.conf,
@@ -202,6 +218,7 @@ class WeightSegmentationValidator(WeightValidator, SegmentationValidator):
         return p, proto
 
     def init_metrics(self, model):
+        """Initialize evaluation metrics for masks, detections, and weights."""
         super().init_metrics(model)
         self.stats = dict(
             tp_m=[],
@@ -213,7 +230,7 @@ class WeightSegmentationValidator(WeightValidator, SegmentationValidator):
         )
 
     def update_metrics(self, preds, batch):
-        """Metrics."""
+        """Update metrics with values from predictions and batch."""
         for si, (pred, proto) in enumerate(zip(preds[0], preds[1])):
             self.seen += 1
             npr = len(pred)
@@ -272,6 +289,7 @@ class WeightSegmentationValidator(WeightValidator, SegmentationValidator):
                 self.pred_to_json(predn, batch["im_file"][si], pred_masks)
 
     def pred_to_json(self, predn, filename, pred_masks):
+        """Serialize predictions to json."""
         super().pred_to_json(predn, filename, pred_masks)
         for i, p in enumerate(predn):
             self.jdict[i]["weight"] = p[:, -1]
@@ -296,7 +314,7 @@ class WeightSegmentationValidator(WeightValidator, SegmentationValidator):
         )
 
     def plot_val_samples(self, batch, ni):
-        """Plots validation samples with bounding box labels and weights."""
+        """Plots validation samples with masks, bounding box labels, and weights."""
         plot_images(
             batch["img"],
             batch["batch_idx"],

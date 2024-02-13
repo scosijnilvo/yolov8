@@ -187,6 +187,7 @@ def load_inference_source(source=None, vid_stride=1, buffer=False):
 
 
 def _build_custom_dataset(cls, cfg, img_path, batch, data, mode="train", rect=False, stride=32):
+    """Build a dataset with custom class."""
     return cls(
         img_path=img_path,
         imgsz=cfg.imgsz,
@@ -207,4 +208,5 @@ def _build_custom_dataset(cls, cfg, img_path, batch, data, mode="train", rect=Fa
 
 
 def build_weight_dataset(cfg, img_path, batch, data, mode="train", rect=False, stride=32):
+    """Build a `WeightDataset`."""
     return _build_custom_dataset(WeightDataset, cfg, img_path, batch, data, mode, rect, stride)

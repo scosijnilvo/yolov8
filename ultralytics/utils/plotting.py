@@ -843,6 +843,7 @@ def plot_results(file="path/to/results.csv", dir="", segment=False, pose=False, 
         segment (bool, optional): Flag to indicate if the data is for segmentation. Defaults to False.
         pose (bool, optional): Flag to indicate if the data is for pose estimation. Defaults to False.
         classify (bool, optional): Flag to indicate if the data is for classification. Defaults to False.
+        weights (bool, optional): Flag to indicate if the data includes weights. Defaults to False.
         on_plot (callable, optional): Callback function to be executed after plotting. Takes filename as an argument.
             Defaults to None.
 

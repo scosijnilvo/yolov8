@@ -1270,7 +1270,12 @@ class ToTensor:
 
 
 class WeightFormat(Format):
+    """
+    Extends class `Format` with weights.
+    """
+
     def __call__(self, labels):
+        """Return formatted labels to be used by `collate_fn`."""
         nl = len(labels["instances"])
         weights = labels.pop("weights")
         new_labels = super().__call__(labels)

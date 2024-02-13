@@ -292,6 +292,10 @@ class RotatedTaskAlignedAssigner(TaskAlignedAssigner):
 
 
 class WeightTaskAlignedAssigner(TaskAlignedAssigner):
+    """
+    Extends `TaskAlignedAssigner` to include ground-truth assignment for object weights.
+    """
+
     @torch.no_grad()
     def forward(self, pd_scores, pd_bboxes, pd_weights, anc_points, gt_labels, gt_bboxes, gt_weights, mask_gt):
         """

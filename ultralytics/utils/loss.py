@@ -712,6 +712,8 @@ class v8OBBLoss(v8DetectionLoss):
 
 
 class WeightLoss():
+    """A mixin class with shared methods for `WeightDetectionLoss` and `WeightSegmentationLoss`."""
+
     def __init__(self, model):
         """Initializes the class, taking a de-paralleled model as argument."""
         super().__init__(model)
@@ -741,9 +743,10 @@ class WeightLoss():
 
 
 class WeightDetectionLoss(WeightLoss, v8DetectionLoss):
-    """Criterion class for computing training losses."""
+    """Extends `v8DetectionLoss` to include the loss of object weights in the loss sum."""
 
     def __call__(self, preds, batch):
+        """Calculate the sum of the loss for box, cls, dfl, and weights multiplied by batch size."""
         loss = torch.zeros(4, device=self.device)  # box, cls, dfl, weight
         feats, pred_weights = preds if isinstance(preds[0], list) else preds[1]
         batch_size = pred_weights.shape[0]
@@ -798,10 +801,10 @@ class WeightDetectionLoss(WeightLoss, v8DetectionLoss):
 
 
 class WeightSegmentationLoss(WeightLoss, v8SegmentationLoss):
-    """Criterion class for computing training losses."""
+    """Extends `v8SegmentationLoss` to include the loss of object weights in the loss sum."""
 
     def __call__(self, preds, batch):
-        """Calculate and return the loss."""
+        """Calculate the sum of the loss for box, masks, cls, dfl, and weights multiplied by batch size."""
         loss = torch.zeros(5, device=self.device) # box, seg, cls, dfl, weight
         feats, pred_masks, proto, pred_weights = preds if len(preds) == 4 else preds[1]
         batch_size, _, mask_h, mask_w = proto.shape
@@ -872,5 +875,6 @@ class WeightedMSELoss(nn.Module):
     """Mean squared error loss weighted by target scores."""
 
     def forward(self, pred, target, target_scores, target_scores_sum, fg_mask):
+        """Calculate and return the element-wise mean squared error loss weighted by target scores."""
         weight = target_scores.sum(-1)[fg_mask].unsqueeze(-1)
         return (weight * (pred[fg_mask] - target[fg_mask]) ** 2).sum() / target_scores_sum

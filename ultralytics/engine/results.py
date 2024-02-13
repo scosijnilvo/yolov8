@@ -376,12 +376,18 @@ class Results(SimpleClass):
 
 
 class WeightResults(Results):
+    """
+    Extends `Results` with an additional attribute `weights` containing the predicted weight for each detected object. 
+    """
+
     def __init__(self, orig_img, path, names, boxes=None, masks=None, probs=None, keypoints=None, obb=None, weights=None):
+        """Initialize the WeightResults class."""
         super().__init__(orig_img, path, names, boxes, masks, probs, keypoints, obb)
         self.weights = weights
         self._keys = "boxes", "masks", "probs", "keypoints", "obb", "weights"
 
     def update(self, boxes=None, masks=None, probs=None, weights=None):
+        """Update the boxes, masks, probs, and weights of the WeightResults object."""
         super().update(boxes, masks, probs) 
         if weights is not None:
             self.weights = weights

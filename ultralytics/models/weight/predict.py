@@ -5,7 +5,12 @@ from ultralytics.utils import ops
 
 
 class WeightDetectionPredictor(DetectionPredictor):
+    """
+    Extends `DetectionPredictor` with weight of objects.
+    """
+
     def postprocess(self, preds, img, orig_imgs):
+        """Post-processes predictions and returns a list of WeightResults objects."""
         p = ops.non_max_suppression(
             preds,
             self.args.conf,
@@ -38,6 +43,10 @@ class WeightDetectionPredictor(DetectionPredictor):
 
 
 class WeightSegmentationPredictor(SegmentationPredictor):
+    """
+    Extends `SegmentationPredictor` with weight of objects.
+    """
+    
     def postprocess(self, preds, img, orig_imgs):
         """Applies non-max suppression and processes detections for each image in an input batch."""
         p = ops.non_max_suppression(

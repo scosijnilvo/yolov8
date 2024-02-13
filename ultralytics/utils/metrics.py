@@ -629,6 +629,27 @@ def error_per_class(
     eps=1e-16,
     prefix=""
 ):
+    """
+    Computes the error metrics per class for object weight evaluation.
+
+    Args:
+        target_cls (np.ndarray): Array of true classes of the detections.
+        tp_w (np.ndarray): Array with true weights, predicted weights, and predicted classes of the detections.
+        plot (bool, optional): Plot error metrics. Defaults to False.
+        on_plot (func, optional): A callback to pass plots path and data when they are rendered. Defaults to None.
+        save_dir (Path, optional): Directory to save the plots. Defaults to an empty path.
+        names (tuple, optional): Tuple of class names used for plotting. Defaults to an empty tuple.
+        eps (float, optional): A small value to avoid division by zero. Defaults to 1e-16.
+        prefix (str, optional): A prefix string for saving the plot files. Defaults to an empty string.
+
+    Returns:
+        (tuple): A tuple of 4 arrays, where:
+            mae (np.ndarray): Mean absolute error for each class. Shape: (nc,).
+            mape (np.ndarray): Mean absolute percentage error for each class. Shape: (nc,).
+            rmse (np.ndarray): Root mean square error for each class. Shape: (nc,).
+            unique_classes (np.ndarray): An array of unique classes that have data. Shape: (nc,).
+    """
+
     unique_cls = np.unique(target_cls)
     num_cls = unique_cls.shape[0]
 
@@ -1330,6 +1351,8 @@ class OBBMetrics(SimpleClass):
 
 
 class WeightMetric(SimpleClass):
+    """Class for computing all evaluation metrics related to object weight."""
+
     def __init__(self):
         """Initializes a WeightMetric instance for computing evaluation metrics for the model."""
         self.all_mae = []
@@ -1360,12 +1383,15 @@ class WeightMetric(SimpleClass):
         return np.nanmean(self.all_rmse)
 
     def mean_results(self):
+        """Returns a list of all metrics."""
         return [self.mae, self.mape, self.rmse]
 
     def class_result(self, i):
+        """Returns mae, mape, and rmse for the class with index i."""
         return self.all_mae[i], self.all_mape[i], self.all_rmse[i]
 
     def fitness(self):
+        """Fitness value used to determine best model for early stopping."""
         if np.isnan(self.mape):
             return 0
         return 1 - self.mape
@@ -1383,11 +1409,13 @@ class WeightDetMetrics(DetMetrics):
     """
 
     def __init__(self, save_dir=Path("."), plot=False, on_plot=None, names=(), weight_fitness=False):
+        """Initialize a `WeightDetMetrics` instance with save directory, plot flag, callback function, class names, and weight_fitness flag."""
         super().__init__(save_dir, plot, on_plot, names)
         self.weight = WeightMetric()
         self.weight_fitness = weight_fitness
     
     def process(self, tp, conf, pred_cls, target_cls, tp_w):
+        """Processes the detection and weight metrics over the given set of predictions."""
         super().process(tp, conf, pred_cls, target_cls)
         results_weight = error_per_class(
             target_cls,
@@ -1411,12 +1439,17 @@ class WeightDetMetrics(DetMetrics):
 
     @property
     def fitness(self):
+        """
+        Fitness score for bounding box and weight (optional).
+        Use parameter weight_fitness=True to include weight.
+        """
         if self.weight_fitness:
             return self.box.fitness() + self.weight.fitness()
         return self.box.fitness()
 
     @property
     def keys(self):
+        """List of keys for all metrics."""
         keys = super().keys
         keys.append("metrics/MAE(W)")
         keys.append("metrics/MAPE(W)")
@@ -1430,11 +1463,13 @@ class WeightSegmentMetrics(SegmentMetrics):
     """
 
     def __init__(self, save_dir=Path("."), plot=False, on_plot=None, names=(), weight_fitness=False):
+        """Initialize a `WeightSegmentMetrics` instance with save directory, plot flag, callback function, class names, and weight_fitness flag."""
         super().__init__(save_dir, plot, on_plot, names)
         self.weight = WeightMetric()
         self.weight_fitness = weight_fitness
 
     def process(self, tp, tp_m, conf, pred_cls, target_cls, tp_w):
+        """Processes the detection, segmentation, and weight metrics over the given set of predictions."""
         super().process(tp, tp_m, conf, pred_cls, target_cls)
         results_weight = error_per_class(
             target_cls,
@@ -1458,12 +1493,17 @@ class WeightSegmentMetrics(SegmentMetrics):
 
     @property
     def fitness(self):
+        """
+        Fitness score for bounding box, segmentation, and weight (optional).
+        Use parameter weight_fitness=True to include weight.
+        """
         if self.weight_fitness:
             return self.box.fitness() + self.seg.fitness() + self.weight.fitness()
         return self.box.fitness() + self.seg.fitness()
 
     @property
     def keys(self):
+        """List of keys for all metrics."""
         keys = super().keys
         keys.append("metrics/MAE(W)")
         keys.append("metrics/MAPE(W)")
