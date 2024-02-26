@@ -701,6 +701,7 @@ def verify_image_label_with_weight(args):
                 _, i = np.unique(lb, axis=0, return_index=True)
                 if len(i) < nl:  # duplicate row check
                     lb = lb[i]  # remove duplicates
+                    weights = weights[i]
                     if segments:
                         segments = [segments[x] for x in i]
                     msg = f"{prefix}WARNING ⚠️ {im_file}: {nl - len(i)} duplicate labels removed"
