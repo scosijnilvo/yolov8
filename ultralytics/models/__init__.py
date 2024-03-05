@@ -2,7 +2,7 @@
 
 from .rtdetr import RTDETR
 from .sam import SAM
-from .yolo import YOLO
+from .yolo import YOLO, YOLOWorld
 from .weight import WeightModel
 
-__all__ = "YOLO", "RTDETR", "SAM", "WeightModel"  # allow simpler import
+__all__ = "YOLO", "RTDETR", "SAM", "YOLOWorld", "WeightModel"  # allow simpler import
