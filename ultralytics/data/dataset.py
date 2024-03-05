@@ -13,10 +13,10 @@ from PIL import Image
 from ultralytics.utils import LOCAL_RANK, NUM_THREADS, TQDM, colorstr, is_dir_writeable
 from ultralytics.utils.ops import resample_segments
 from .augment import Compose, Format, Instances, LetterBox, classify_augmentations, classify_transforms, v8_transforms
-from .augment import WeightFormat
+from .augment import CustomFormat
 from .base import BaseDataset
 from .utils import HELP_URL, LOGGER, get_hash, img2label_paths, verify_image, verify_image_label
-from .utils import verify_image_label_with_weight
+from .utils import verify_custom_label
 
 # Ultralytics dataset *.cache version, >= 1.0.0 for YOLOv8
 DATASET_CACHE_VERSION = "1.0.3"
@@ -384,11 +384,10 @@ class SemanticDataset(BaseDataset):
         super().__init__()
 
 
-class WeightDataset(YOLODataset):
+class CustomDataset(YOLODataset):
     """
-    Extends `YOLODataset`.
+    Extends `YOLODataset` with support for additional variables.
     Dataset class for loading detection/segmentation labels in YOLO format.
-    Includes one additional value for object weight.
     """
 
     def cache_labels(self, path=Path("./labels.cache")):
@@ -412,7 +411,7 @@ class WeightDataset(YOLODataset):
             )
         with ThreadPool(NUM_THREADS) as pool:
             results = pool.imap(
-                func=verify_image_label_with_weight,
+                func=verify_custom_label,
                 iterable=zip(
                     self.im_files,
                     self.label_files,
@@ -424,7 +423,7 @@ class WeightDataset(YOLODataset):
                 ),
             )
             pbar = TQDM(results, desc=desc, total=total)
-            for im_file, lb, shape, weights, segments, keypoint, nm_f, nf_f, ne_f, nc_f, msg in pbar:
+            for im_file, lb, shape, extra_vars, segments, keypoint, nm_f, nf_f, ne_f, nc_f, msg in pbar:
                 nm += nm_f
                 nf += nf_f
                 ne += ne_f
@@ -436,7 +435,7 @@ class WeightDataset(YOLODataset):
                             shape=shape,
                             cls=lb[:, 0:1],  # n, 1
                             bboxes=lb[:, 1:],  # n, 4
-                            weights=weights,
+                            extra_vars=extra_vars,
                             segments=segments,
                             keypoints=keypoint,
                             normalized=True,
@@ -467,7 +466,7 @@ class WeightDataset(YOLODataset):
             value = values[i]
             if k == "img":
                 value = torch.stack(value, 0)
-            if k in ["masks", "keypoints", "bboxes", "cls", "segments", "obb", "weights"]:
+            if k in ["masks", "keypoints", "bboxes", "cls", "segments", "obb", "extra_vars"]:
                 value = torch.cat(value, 0)
             new_batch[k] = value
         new_batch["batch_idx"] = list(new_batch["batch_idx"])
@@ -485,7 +484,7 @@ class WeightDataset(YOLODataset):
         else:
             transforms = Compose([LetterBox(new_shape=(self.imgsz, self.imgsz), scaleup=False)])
         transforms.append(
-            WeightFormat(
+            CustomFormat(
                 bbox_format="xywh",
                 normalize=True,
                 return_mask=self.use_segments,

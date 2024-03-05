@@ -716,8 +716,8 @@ class v8OBBLoss(v8DetectionLoss):
         return torch.cat((dist2rbox(pred_dist, pred_angle, anchor_points), pred_angle), dim=-1)
 
 
-class WeightLoss():
-    """A mixin class with shared methods for `WeightDetectionLoss` and `WeightSegmentationLoss`."""
+class RegressionLoss():
+    """A mixin class with shared methods for `RegressionDetectionLoss` and `RegressionSegmentationLoss`."""
 
     def __init__(self, model):
         """Initializes the class, taking a de-paralleled model as argument."""
@@ -727,7 +727,6 @@ class WeightLoss():
         beta = self.assigner.beta
         # create new task-aligned assigner that includes ground-truth values for weights
         self.assigner = WeightTaskAlignedAssigner(topk=topk, num_classes=self.nc, alpha=alpha, beta=beta)
-        self.weighted_mse_loss = WeightedMSELoss().to(self.device)
 
     def preprocess(self, targets, batch_size, scale_tensor):
         """Preprocesses the target counts and matches with the input batch size to output a tensor."""
@@ -747,7 +746,7 @@ class WeightLoss():
         return out
 
 
-class WeightDetectionLoss(WeightLoss, v8DetectionLoss):
+class RegressionDetectionLoss(RegressionLoss, v8DetectionLoss):
     """Extends `v8DetectionLoss` to include the loss of object weights in the loss sum."""
 
     def __call__(self, preds, batch):
@@ -794,10 +793,7 @@ class WeightDetectionLoss(WeightLoss, v8DetectionLoss):
                 fg_mask,
             )
             # Weights loss
-            if self.hyp.weighted_loss:
-                loss[3] = self.weighted_mse_loss(pred_weights, target_weights, target_scores, target_scores_sum, fg_mask)
-            else:
-                loss[3] = F.mse_loss(pred_weights[fg_mask], target_weights[fg_mask])
+            loss[3] = F.mse_loss(pred_weights[fg_mask], target_weights[fg_mask])
         loss[0] *= self.hyp.box  # box gain
         loss[1] *= self.hyp.cls  # cls gain
         loss[2] *= self.hyp.dfl  # dfl gain
@@ -805,7 +801,7 @@ class WeightDetectionLoss(WeightLoss, v8DetectionLoss):
         return loss.sum() * batch_size, loss.detach()  # loss(box, cls, dfl, weight)
 
 
-class WeightSegmentationLoss(WeightLoss, v8SegmentationLoss):
+class RegressionSegmentationLoss(RegressionLoss, v8SegmentationLoss):
     """Extends `v8SegmentationLoss` to include the loss of object weights in the loss sum."""
 
     def __call__(self, preds, batch):
@@ -861,10 +857,7 @@ class WeightSegmentationLoss(WeightLoss, v8SegmentationLoss):
                 fg_mask, masks, target_gt_idx, target_bboxes, batch_idx, proto, pred_masks, imgsz, self.overlap
             )
             # Weights loss
-            if self.hyp.weighted_loss:
-                loss[4] = self.weighted_mse_loss(pred_weights, target_weights, target_scores, target_scores_sum, fg_mask)
-            else:
-                loss[4] = F.mse_loss(pred_weights[fg_mask], target_weights[fg_mask])
+            loss[4] = F.mse_loss(pred_weights[fg_mask], target_weights[fg_mask])
         # WARNING: lines below prevent Multi-GPU DDP 'unused gradient' PyTorch errors, do not remove
         else:
             loss[1] += (proto * 0).sum() + (pred_masks * 0).sum()  # inf sums may lead to nan loss
@@ -874,12 +867,3 @@ class WeightSegmentationLoss(WeightLoss, v8SegmentationLoss):
         loss[3] *= self.hyp.dfl  # dfl gain
         loss[4] *= self.hyp.wgt  # weight gain
         return loss.sum() * batch_size, loss.detach()  # loss(box, seg, cls, dfl, weight)
-
-
-class WeightedMSELoss(nn.Module):
-    """Mean squared error loss weighted by target scores."""
-
-    def forward(self, pred, target, target_scores, target_scores_sum, fg_mask):
-        """Calculate and return the element-wise mean squared error loss weighted by target scores."""
-        weight = target_scores.sum(-1)[fg_mask].unsqueeze(-1)
-        return (weight * (pred[fg_mask] - target[fg_mask]) ** 2).sum() / target_scores_sum

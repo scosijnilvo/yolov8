@@ -63,7 +63,7 @@ from .conv import (
     SpatialAttention,
 )
 from .head import OBB, Classify, Detect, Pose, RTDETRDecoder, Segment, WorldDetect
-from .head import WeightDetect, WeightSegment
+from .head import DetectRegressor, SegmentRegressor
 from .transformer import (
     AIFI,
     MLP,
@@ -136,6 +136,6 @@ __all__ = (
     "CBFuse",
     "CBLinear",
     "Silence",
-    "WeightDetect",
-    "WeightSegment",
+    "DetectRegressor",
+    "SegmentRegressor",
 )

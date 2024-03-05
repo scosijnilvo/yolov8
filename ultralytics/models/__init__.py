@@ -3,6 +3,6 @@
 from .rtdetr import RTDETR
 from .sam import SAM
 from .yolo import YOLO, YOLOWorld
-from .weight import WeightModel
+from .regression import RegressionModel
 
-__all__ = "YOLO", "RTDETR", "SAM", "YOLOWorld", "WeightModel"  # allow simpler import
+__all__ = "YOLO", "RTDETR", "SAM", "YOLOWorld", "RegressionModel"  # allow simpler import

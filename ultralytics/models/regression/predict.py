@@ -1,16 +1,16 @@
 from ultralytics.models.yolo.detect.predict import DetectionPredictor
 from ultralytics.models.yolo.segment.predict import SegmentationPredictor
-from ultralytics.engine.results import WeightResults
+from ultralytics.engine.results import RegressionResults
 from ultralytics.utils import ops
 
 
-class WeightDetectionPredictor(DetectionPredictor):
+class RegressionDetectionPredictor(DetectionPredictor):
     """
-    Extends `DetectionPredictor` with weight of objects.
+    Extends `DetectionPredictor` with regression for extra variables.
     """
 
     def postprocess(self, preds, img, orig_imgs):
-        """Post-processes predictions and returns a list of WeightResults objects."""
+        """Post-processes predictions and returns a list of RegressionResults objects."""
         p = ops.non_max_suppression(
             preds,
             self.args.conf,
@@ -31,7 +31,7 @@ class WeightDetectionPredictor(DetectionPredictor):
                 pred[:, :4] = ops.scale_boxes(img.shape[2:], pred[:, :4], orig_img.shape)
                 weights = pred[:, -1]
             results.append(
-                WeightResults(
+                RegressionResults(
                     orig_img,
                     path=img_path,
                     names=self.model.names,
@@ -42,9 +42,9 @@ class WeightDetectionPredictor(DetectionPredictor):
         return results
 
 
-class WeightSegmentationPredictor(SegmentationPredictor):
+class RegressionSegmentationPredictor(SegmentationPredictor):
     """
-    Extends `SegmentationPredictor` with weight of objects.
+    Extends `SegmentationPredictor` with regression for extra variables.
     """
     
     def postprocess(self, preds, img, orig_imgs):
@@ -77,7 +77,7 @@ class WeightSegmentationPredictor(SegmentationPredictor):
                     pred[:, :4] = ops.scale_boxes(img.shape[2:], pred[:, :4], orig_img.shape)
                 weights = pred[:, -1]
             results.append(
-                WeightResults(
+                RegressionResults(
                     orig_img,
                     path=img_path,
                     names=self.model.names,
