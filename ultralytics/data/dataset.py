@@ -16,7 +16,7 @@ from .augment import Compose, Format, Instances, LetterBox, classify_augmentatio
 from .augment import WeightFormat
 from .base import BaseDataset
 from .utils import HELP_URL, LOGGER, get_hash, img2label_paths, verify_image, verify_image_label
-from .utils import verify_image_label_with_weight
+from .utils import verify_image_label_with_weight, img2label_paths_v2
 
 # Ultralytics dataset *.cache version, >= 1.0.0 for YOLOv8
 DATASET_CACHE_VERSION = "1.0.3"
@@ -112,7 +112,10 @@ class YOLODataset(BaseDataset):
 
     def get_labels(self):
         """Returns dictionary of labels for YOLO training."""
-        self.label_files = img2label_paths(self.im_files)
+        if 'label_dir' in self.data:
+            self.label_files = img2label_paths_v2(self.im_files, self.data['label_dir'])
+        else:
+            self.label_files = img2label_paths(self.im_files)
         cache_path = Path(self.label_files[0]).parent.with_suffix(".cache")
         try:
             cache, exists = load_dataset_cache_file(cache_path), True  # attempt to load a *.cache file

@@ -46,6 +46,16 @@ def img2label_paths(img_paths):
     return [sb.join(x.rsplit(sa, 1)).rsplit(".", 1)[0] + ".txt" for x in img_paths]
 
 
+def img2label_paths_v2(img_paths, label_dir):
+    label_paths = []
+    label_dir = Path(label_dir)
+    for img_path in img_paths:
+        img_path = Path(img_path)
+        label_path = os.path.join(*label_dir.parts, img_path.parent.name, img_path.with_suffix('.txt').name)
+        label_paths.append(label_path)
+    return label_paths
+
+
 def get_hash(paths):
     """Returns a single hash value of a list of paths (files or dirs)."""
     size = sum(os.path.getsize(p) for p in paths if os.path.exists(p))  # sizes
@@ -712,9 +722,11 @@ def verify_image_label_with_weight(args):
             else:
                 ne = 1  # label empty
                 lb = np.zeros((0, (5 + nkpt * ndim) if keypoint else 5), dtype=np.float32)
+                weights = np.zeros((0, 1), dtype=np.float32)
         else:
             nm = 1  # label missing
             lb = np.zeros((0, (5 + nkpt * ndim) if keypoints else 5), dtype=np.float32)
+            weights = np.zeros((0, 1), dtype=np.float32)
         if keypoint:
             keypoints = lb[:, 5:].reshape(-1, nkpt, ndim)
             if ndim == 2:
