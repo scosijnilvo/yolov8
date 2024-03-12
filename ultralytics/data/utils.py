@@ -663,9 +663,9 @@ def autosplit(path=DATASETS_DIR / "coco8/images", weights=(0.9, 0.1, 0.0), annot
 
 def verify_custom_label(args):
     """Verify one image-label pair."""
-    im_file, lb_file, prefix, keypoint, num_cls, nkpt, ndim = args
-    # Number (missing, found, empty, corrupt), message, weights, segments, keypoints
-    nm, nf, ne, nc, msg, weights, segments, keypoints = 0, 0, 0, 0, "", 0, [], None
+    im_file, lb_file, prefix, keypoint, num_cls, nkpt, ndim, num_extra_vars = args
+    # Number (missing, found, empty, corrupt), message, extra_vars, segments, keypoints
+    nm, nf, ne, nc, msg, extra_vars, segments, keypoints = 0, 0, 0, 0, "", None, [], None
     try:
         # Verify images
         im = Image.open(im_file)
@@ -686,9 +686,9 @@ def verify_custom_label(args):
             with open(lb_file) as f:
                 lb = [x.split() for x in f.read().strip().splitlines() if len(x)]
                 classes = np.array([x[0] for x in lb], dtype=np.float32)
-                weights = np.array([x[1] for x in lb], dtype=np.float32).reshape(-1, 1)
-                if any(len(x) > 7 for x in lb) and (not keypoint):  # is segment
-                    segments = [np.array(x[2:], dtype=np.float32).reshape(-1, 2) for x in lb]
+                extra_vars = np.array([x[1:num_extra_vars + 1] for x in lb], dtype=np.float32).reshape(-1, 1)
+                if any(len(x) > 6 + num_extra_vars for x in lb) and (not keypoint):  # is segment
+                    segments = [np.array(x[num_extra_vars + 1:], dtype=np.float32).reshape(-1, 2) for x in lb]
                     lb = np.concatenate((classes.reshape(-1, 1), segments2boxes(segments)), 1)
                 elif keypoint:
                     keypoints = [np.array(x[2:], dtype=np.float32) for x in lb]
@@ -715,25 +715,25 @@ def verify_custom_label(args):
                 _, i = np.unique(lb, axis=0, return_index=True)
                 if len(i) < nl:  # duplicate row check
                     lb = lb[i]  # remove duplicates
-                    weights = weights[i]
+                    extra_vars = extra_vars[i]
                     if segments:
                         segments = [segments[x] for x in i]
                     msg = f"{prefix}WARNING ⚠️ {im_file}: {nl - len(i)} duplicate labels removed"
             else:
                 ne = 1  # label empty
                 lb = np.zeros((0, (5 + nkpt * ndim) if keypoint else 5), dtype=np.float32)
-                weights = np.zeros((0, 1), dtype=np.float32)
+                extra_vars = np.zeros((0, num_extra_vars), dtype=np.float32)
         else:
             nm = 1  # label missing
             lb = np.zeros((0, (5 + nkpt * ndim) if keypoints else 5), dtype=np.float32)
-            weights = np.zeros((0, 1), dtype=np.float32)
+            extra_vars = np.zeros((0, num_extra_vars), dtype=np.float32)
         if keypoint:
             keypoints = lb[:, 5:].reshape(-1, nkpt, ndim)
             if ndim == 2:
                 kpt_mask = np.where((keypoints[..., 0] < 0) | (keypoints[..., 1] < 0), 0.0, 1.0).astype(np.float32)
                 keypoints = np.concatenate([keypoints, kpt_mask[..., None]], axis=-1)  # (nl, nkpt, 3)
         lb = lb[:, :5]
-        return im_file, lb, shape, weights, segments, keypoints, nm, nf, ne, nc, msg
+        return im_file, lb, shape, extra_vars, segments, keypoints, nm, nf, ne, nc, msg
     except Exception as e:
         nc = 1
         msg = f"{prefix}WARNING ⚠️ {im_file}: ignoring corrupt image/label: {e}"

@@ -393,6 +393,12 @@ class CustomDataset(YOLODataset):
     Dataset class for loading detection/segmentation labels in YOLO format.
     """
 
+    def __init__(self, *args, num_extra_vars=1, **kwargs):
+        """Validate `num_extra_vars` parameter."""
+        self.num_extra_vars = num_extra_vars
+        assert self.num_extra_vars > 0, "'num_extra_vars' must be an integer greater than 0."
+        super().__init__(*args, **kwargs)
+
     def cache_labels(self, path=Path("./labels.cache")):
         """
         Cache dataset labels, check images and read shapes.
@@ -423,6 +429,7 @@ class CustomDataset(YOLODataset):
                     repeat(len(self.data["names"])),
                     repeat(nkpt),
                     repeat(ndim),
+                    repeat(self.num_extra_vars),
                 ),
             )
             pbar = TQDM(results, desc=desc, total=total)

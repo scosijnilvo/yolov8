@@ -19,11 +19,11 @@ class RegressionTrainer():
 class RegressionDetectionTrainer(RegressionTrainer, yolo.detect.DetectionTrainer):
     """Extends `DetectionTrainer` with a custom model and validator."""
 
-    def get_model(self, cfg=None, extra_vars=None, verbose=True):
+    def get_model(self, cfg=None, weights=None, verbose=True):
         """Return RegressionDetectionModel initialized with specified config and extra vars."""
         model = RegressionDetectionModel(cfg, ch=3, nc=self.data["nc"], verbose=verbose and RANK == -1)
-        if extra_vars:
-            model.load(extra_vars)
+        if weights:
+            model.load(weights)
         return model
 
     def get_validator(self):
@@ -41,11 +41,11 @@ class RegressionDetectionTrainer(RegressionTrainer, yolo.detect.DetectionTrainer
 class RegressionSegmentationTrainer(RegressionTrainer, yolo.segment.SegmentationTrainer):
     """Extends `SegmentationTrainer` with a custom model and validator."""
 
-    def get_model(self, cfg=None, extra_vars=None, verbose=True):
+    def get_model(self, cfg=None, weights=None, verbose=True):
         """Return RegressionSegmentationModel initialized with specified config and extra vars."""
         model = RegressionSegmentationModel(cfg, ch=3, nc=self.data["nc"], verbose=verbose and RANK == -1)
-        if extra_vars:
-            model.load(extra_vars)
+        if weights:
+            model.load(weights)
         return model
 
     def get_validator(self):
