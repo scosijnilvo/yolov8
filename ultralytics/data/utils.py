@@ -686,16 +686,16 @@ def verify_custom_label(args):
             with open(lb_file) as f:
                 lb = [x.split() for x in f.read().strip().splitlines() if len(x)]
                 classes = np.array([x[0] for x in lb], dtype=np.float32)
-                extra_vars = np.array([x[1:num_extra_vars + 1] for x in lb], dtype=np.float32).reshape(-1, 1)
+                extra_vars = np.array([x[1:num_extra_vars + 1] for x in lb], dtype=np.float32)
                 if any(len(x) > 6 + num_extra_vars for x in lb) and (not keypoint):  # is segment
                     segments = [np.array(x[num_extra_vars + 1:], dtype=np.float32).reshape(-1, 2) for x in lb]
                     lb = np.concatenate((classes.reshape(-1, 1), segments2boxes(segments)), 1)
                 elif keypoint:
-                    keypoints = [np.array(x[2:], dtype=np.float32) for x in lb]
+                    keypoints = [np.array(x[num_extra_vars + 1:], dtype=np.float32) for x in lb]
                     lb = np.concatenate((classes.reshape(-1, 1), keypoints), 1)
                 else:
                     lb = np.array(lb, dtype=np.float32)
-                    lb = np.concatenate((lb[:, 0].reshape(-1, 1), lb[:, 2:]), 1)
+                    lb = np.concatenate((lb[:, 0].reshape(-1, 1), lb[:, num_extra_vars + 1:]), 1)
             nl = len(lb)
             if nl:
                 if keypoint:
