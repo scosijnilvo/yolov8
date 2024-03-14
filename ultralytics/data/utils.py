@@ -663,7 +663,7 @@ def autosplit(path=DATASETS_DIR / "coco8/images", weights=(0.9, 0.1, 0.0), annot
 
 def verify_custom_label(args):
     """Verify one image-label pair."""
-    im_file, lb_file, prefix, keypoint, num_cls, nkpt, ndim, num_extra_vars = args
+    im_file, lb_file, prefix, keypoint, num_cls, nkpt, ndim, num_vars = args
     # Number (missing, found, empty, corrupt), message, extra_vars, segments, keypoints
     nm, nf, ne, nc, msg, extra_vars, segments, keypoints = 0, 0, 0, 0, "", None, [], None
     try:
@@ -686,16 +686,16 @@ def verify_custom_label(args):
             with open(lb_file) as f:
                 lb = [x.split() for x in f.read().strip().splitlines() if len(x)]
                 classes = np.array([x[0] for x in lb], dtype=np.float32)
-                extra_vars = np.array([x[1:num_extra_vars + 1] for x in lb], dtype=np.float32)
-                if any(len(x) > 6 + num_extra_vars for x in lb) and (not keypoint):  # is segment
-                    segments = [np.array(x[num_extra_vars + 1:], dtype=np.float32).reshape(-1, 2) for x in lb]
+                extra_vars = np.array([x[1:num_vars + 1] for x in lb], dtype=np.float32)
+                if any(len(x) > 6 + num_vars for x in lb) and (not keypoint):  # is segment
+                    segments = [np.array(x[num_vars + 1:], dtype=np.float32).reshape(-1, 2) for x in lb]
                     lb = np.concatenate((classes.reshape(-1, 1), segments2boxes(segments)), 1)
                 elif keypoint:
-                    keypoints = [np.array(x[num_extra_vars + 1:], dtype=np.float32) for x in lb]
+                    keypoints = [np.array(x[num_vars + 1:], dtype=np.float32) for x in lb]
                     lb = np.concatenate((classes.reshape(-1, 1), keypoints), 1)
                 else:
                     lb = np.array(lb, dtype=np.float32)
-                    lb = np.concatenate((lb[:, 0].reshape(-1, 1), lb[:, num_extra_vars + 1:]), 1)
+                    lb = np.concatenate((lb[:, 0].reshape(-1, 1), lb[:, num_vars + 1:]), 1)
             nl = len(lb)
             if nl:
                 if keypoint:
@@ -722,11 +722,11 @@ def verify_custom_label(args):
             else:
                 ne = 1  # label empty
                 lb = np.zeros((0, (5 + nkpt * ndim) if keypoint else 5), dtype=np.float32)
-                extra_vars = np.zeros((0, num_extra_vars), dtype=np.float32)
+                extra_vars = np.zeros((0, num_vars), dtype=np.float32)
         else:
             nm = 1  # label missing
             lb = np.zeros((0, (5 + nkpt * ndim) if keypoints else 5), dtype=np.float32)
-            extra_vars = np.zeros((0, num_extra_vars), dtype=np.float32)
+            extra_vars = np.zeros((0, num_vars), dtype=np.float32)
         if keypoint:
             keypoints = lb[:, 5:].reshape(-1, nkpt, ndim)
             if ndim == 2:

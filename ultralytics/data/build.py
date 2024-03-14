@@ -204,7 +204,7 @@ def _build_custom_dataset(cls, cfg, img_path, batch, data, mode="train", rect=Fa
         classes=cfg.classes,
         data=data,
         fraction=cfg.fraction if mode == "train" else 1.0,
-        num_extra_vars=cfg.num_extra_vars,
+        num_vars=cfg.num_vars,
     )
 
 

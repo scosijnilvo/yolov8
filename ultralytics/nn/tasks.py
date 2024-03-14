@@ -376,8 +376,11 @@ class SegmentationModel(DetectionModel):
 
 class RegressionDetectionModel(DetectionModel):
     """Model for detection and prediction of extra variables"""
-    def __init__(self, cfg="yolov8n-weight.yaml", ch=3, nc=None, verbose=True):
+    def __init__(self, cfg="yolov8n-det-regression.yaml", ch=3, nc=None, nv=None, verbose=True):
         """Initialize the RegressionDetectionModel with given config and parameters."""
+        if not isinstance(cfg, dict):
+            cfg = yaml_model_load(cfg)  # load model YAML
+        cfg["nv"] = nv
         super().__init__(cfg=cfg, ch=ch, nc=nc, verbose=verbose)
 
     def init_criterion(self):
@@ -388,8 +391,11 @@ class RegressionDetectionModel(DetectionModel):
 class RegressionSegmentationModel(SegmentationModel):
     """Model for segmentation and prediction of extra variables"""
 
-    def __init__(self, cfg="yolov8n-weight-seg.yaml", ch=3, nc=None, verbose=True):
+    def __init__(self, cfg="yolov8n-seg-regression.yaml", ch=3, nc=None, nv=None, verbose=True):
         """Initialize the RegressionSegmentationModel with given config and parameters."""
+        if not isinstance(cfg, dict):
+            cfg = yaml_model_load(cfg)  # load model YAML
+        cfg["nv"] = nv
         super().__init__(cfg=cfg, ch=ch, nc=nc, verbose=verbose)
 
     def init_criterion(self):
@@ -925,6 +931,8 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             args.append([ch[x] for x in f])
             if m is Segment or m is SegmentRegressor:
                 args[2] = make_divisible(min(args[2], max_channels) * width, 8)
+            if m is DetectRegressor or m is SegmentRegressor:
+                args.append(d.get("nv"))
         elif m is RTDETRDecoder:  # special case, channels arg must be passed in index 1
             args.insert(1, [ch[x] for x in f])
         elif m is CBLinear:

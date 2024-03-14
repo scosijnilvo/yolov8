@@ -752,27 +752,27 @@ class RegressionDetectionLoss(RegressionLoss, v8DetectionLoss):
     def __call__(self, preds, batch):
         """Calculate the sum of the loss for box, cls, dfl, and weights multiplied by batch size."""
         loss = torch.zeros(4, device=self.device)  # box, cls, dfl, regression
-        feats, pred_weights = preds if isinstance(preds[0], list) else preds[1]
-        batch_size = pred_weights.shape[0]
+        feats, pred_vars = preds if isinstance(preds[0], list) else preds[1]
+        batch_size = pred_vars.shape[0]
         pred_distri, pred_scores = torch.cat([xi.view(feats[0].shape[0], self.no, -1) for xi in feats], 2).split(
             (self.reg_max * 4, self.nc), 1
         )
         pred_scores = pred_scores.permute(0, 2, 1).contiguous()
         pred_distri = pred_distri.permute(0, 2, 1).contiguous()
-        pred_weights = pred_weights.permute(0, 2, 1).contiguous()
+        pred_vars = pred_vars.permute(0, 2, 1).contiguous()
         dtype = pred_scores.dtype
         imgsz = torch.tensor(feats[0].shape[2:], device=self.device, dtype=dtype) * self.stride[0]
         anchor_points, stride_tensor = make_anchors(feats, self.stride, 0.5)
-        num_extra_vars = batch['extra_vars'].shape[1]
+        num_vars = batch['extra_vars'].shape[1]
         targets = torch.cat((batch["batch_idx"].view(-1, 1), batch["cls"].view(-1, 1), batch["bboxes"], batch["extra_vars"]), 1)
         targets = self.preprocess(targets.to(self.device), batch_size, scale_tensor=imgsz[[1, 0, 1, 0]])
-        gt_labels, gt_bboxes, gt_vars = targets.split((1, 4, num_extra_vars), 2)  # cls, xyxy, extra_vars
+        gt_labels, gt_bboxes, gt_vars = targets.split((1, 4, num_vars), 2)  # cls, xyxy, extra_vars
         mask_gt = gt_bboxes.sum(2, keepdim=True).gt_(0)
         pred_bboxes = self.bbox_decode(anchor_points, pred_distri)  # xyxy, (b, h*w, 4)
         _, target_bboxes, target_scores, target_vars, fg_mask, _ = self.assigner(
             pred_scores.detach().sigmoid(),
             (pred_bboxes.detach() * stride_tensor).type(gt_bboxes.dtype),
-            pred_weights.detach(),
+            pred_vars.detach(),
             anchor_points * stride_tensor,
             gt_labels,
             gt_bboxes,
@@ -794,7 +794,7 @@ class RegressionDetectionLoss(RegressionLoss, v8DetectionLoss):
                 fg_mask,
             )
             # Regression loss
-            loss[3] = F.mse_loss(pred_weights[fg_mask], target_vars[fg_mask])
+            loss[3] = F.mse_loss(pred_vars[fg_mask], target_vars[fg_mask])
         loss[0] *= self.hyp.box  # box gain
         loss[1] *= self.hyp.cls  # cls gain
         loss[2] *= self.hyp.dfl  # dfl gain
@@ -808,8 +808,7 @@ class RegressionSegmentationLoss(RegressionLoss, v8SegmentationLoss):
     def __call__(self, preds, batch):
         """Calculate the sum of the loss for box, masks, cls, dfl, and weights multiplied by batch size."""
         loss = torch.zeros(5, device=self.device) # box, seg, cls, dfl, regression
-        # TODO pred_weights
-        feats, pred_masks, proto, pred_weights = preds if len(preds) == 4 else preds[1]
+        feats, pred_masks, proto, pred_vars = preds if len(preds) == 4 else preds[1]
         batch_size, _, mask_h, mask_w = proto.shape
         pred_distri, pred_scores = torch.cat([xi.view(feats[0].shape[0], self.no, -1) for xi in feats], 2).split(
             (self.reg_max * 4, self.nc), 1
@@ -817,21 +816,22 @@ class RegressionSegmentationLoss(RegressionLoss, v8SegmentationLoss):
         pred_scores = pred_scores.permute(0, 2, 1).contiguous()
         pred_distri = pred_distri.permute(0, 2, 1).contiguous()
         pred_masks = pred_masks.permute(0, 2, 1).contiguous()
-        pred_weights = pred_weights.permute(0, 2, 1).contiguous()
+        pred_vars = pred_vars.permute(0, 2, 1).contiguous()
+        print(pred_vars.shape)
         dtype = pred_scores.dtype
         imgsz = torch.tensor(feats[0].shape[2:], device=self.device, dtype=dtype) * self.stride[0]
         anchor_points, stride_tensor = make_anchors(feats, self.stride, 0.5)
         batch_idx = batch["batch_idx"].view(-1, 1)
-        num_extra_vars = batch['extra_vars'].shape[1]
+        num_vars = batch['extra_vars'].shape[1]
         targets = torch.cat((batch_idx, batch["cls"].view(-1, 1), batch["bboxes"], batch["extra_vars"]), 1)
         targets = self.preprocess(targets.to(self.device), batch_size, scale_tensor=imgsz[[1, 0, 1, 0]])
-        gt_labels, gt_bboxes, gt_vars = targets.split((1, 4, num_extra_vars), 2)  # cls, xyxy, extra_vars
+        gt_labels, gt_bboxes, gt_vars = targets.split((1, 4, num_vars), 2)  # cls, xyxy, extra_vars
         mask_gt = gt_bboxes.sum(2, keepdim=True).gt_(0)
         pred_bboxes = self.bbox_decode(anchor_points, pred_distri)  # xyxy, (b, h*w, 4)
         _, target_bboxes, target_scores, target_vars, fg_mask, target_gt_idx = self.assigner(
             pred_scores.detach().sigmoid(),
             (pred_bboxes.detach() * stride_tensor).type(gt_bboxes.dtype),
-            pred_weights.detach(),
+            pred_vars.detach(),
             anchor_points * stride_tensor,
             gt_labels,
             gt_bboxes,
@@ -860,7 +860,7 @@ class RegressionSegmentationLoss(RegressionLoss, v8SegmentationLoss):
                 fg_mask, masks, target_gt_idx, target_bboxes, batch_idx, proto, pred_masks, imgsz, self.overlap
             )
             # Regression loss
-            loss[4] = F.mse_loss(pred_weights[fg_mask], target_vars[fg_mask])
+            loss[4] = F.mse_loss(pred_vars[fg_mask], target_vars[fg_mask])
         # WARNING: lines below prevent Multi-GPU DDP 'unused gradient' PyTorch errors, do not remove
         else:
             loss[1] += (proto * 0).sum() + (pred_masks * 0).sum()  # inf sums may lead to nan loss

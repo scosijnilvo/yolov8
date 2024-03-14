@@ -41,7 +41,7 @@ mask_ratio: 4 # (int) mask downsample ratio (segment train only)
 # Classification
 dropout: 0.0 # (float) use dropout regularization (classify train only)
 # Regression
-num_extra_vars: 1 # (int) number of extra variables to predict values for
+num_vars: 1 # (int) number of variables to predict values for
 
 # Val/Test settings ----------------------------------------------------------------------------------------------------
 val: True # (bool) validate/test during training
