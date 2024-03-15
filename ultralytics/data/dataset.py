@@ -394,9 +394,7 @@ class CustomDataset(YOLODataset):
     """
 
     def __init__(self, *args, **kwargs):
-        """Validate `num_vars` parameter."""
         self.num_vars = kwargs["data"]["num_vars"]
-        assert isinstance(self.num_vars, int) and self.num_vars > 0, "'num_vars' must be an integer greater than 0."
         super().__init__(*args, **kwargs)
 
     def cache_labels(self, path=Path("./labels.cache")):

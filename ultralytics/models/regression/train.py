@@ -10,6 +10,12 @@ from ultralytics.utils.torch_utils import de_parallel
 class RegressionTrainer():
     """A mixin class with shared methods for `RegressionDetectionTrainer` and `RegressionSegmentationTrainer`."""
 
+    def __init__(self, cfg=DEFAULT_CFG, overrides=None, _callbacks=None):
+        """Validate `num_vars` parameter."""
+        super().__init__(cfg, overrides, _callbacks)
+        assert isinstance(self.data["num_vars"], int) and self.data["num_vars"] > 0, "'num_vars' must be an integer greater than 0."
+
+
     def build_dataset(self, img_path, mode="train", batch=None):
         """Build a `CustomDataset` in train mode."""
         gs = max(int(de_parallel(self.model).stride.max() if self.model else 0), 32)
