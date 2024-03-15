@@ -485,12 +485,12 @@ class RTDETRDecoder(nn.Module):
 class DetectRegressor(Detect):
     """Extends the `Detect` head with an additional layer for predicting the values of extra variables."""
 
-    def __init__(self, nc=80, ch=(), nv=1):
+    def __init__(self, nc=80, ch=(), num_vars=1):
         """Initializes the detection layer with specified number of classes and channels."""
         super().__init__(nc, ch)
         self.detect = Detect.forward
-        c4 = max(ch[0] // 4, nv)
-        self.cv4 = nn.ModuleList(nn.Sequential(Conv(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, nv, 1)) for x in ch)
+        c4 = max(ch[0] // 4, num_vars)
+        self.cv4 = nn.ModuleList(nn.Sequential(Conv(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, num_vars, 1)) for x in ch)
 
     def forward(self, x):
         """Concatenates and returns the predicted variables with results of the detection layer."""
@@ -505,12 +505,12 @@ class DetectRegressor(Detect):
 class SegmentRegressor(Segment):
     """Extends the `Segment` head with an additional layer for predicting the values of extra variables."""
 
-    def __init__(self, nc=80, nm=32, npr=256, ch=(), nv=1):
+    def __init__(self, nc=80, nm=32, npr=256, ch=(), num_vars=1):
         """Initializes the segmentation layer with specified number of classes, masks, prototypes, and channels."""
         super().__init__(nc, nm, npr, ch)
         self.segment = Segment.forward
-        c5 = max(ch[0] // 4, nv)
-        self.cv5 = nn.ModuleList(nn.Sequential(Conv(x, c5, 3), Conv(c5, c5, 3), nn.Conv2d(c5, nv, 1)) for x in ch)
+        c5 = max(ch[0] // 4, num_vars)
+        self.cv5 = nn.ModuleList(nn.Sequential(Conv(x, c5, 3), Conv(c5, c5, 3), nn.Conv2d(c5, num_vars, 1)) for x in ch)
 
     def forward(self, x):
         """Concatenates and returns the predicted variables with results of the segmentation layer."""

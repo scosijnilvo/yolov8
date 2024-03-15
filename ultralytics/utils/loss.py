@@ -817,7 +817,6 @@ class RegressionSegmentationLoss(RegressionLoss, v8SegmentationLoss):
         pred_distri = pred_distri.permute(0, 2, 1).contiguous()
         pred_masks = pred_masks.permute(0, 2, 1).contiguous()
         pred_vars = pred_vars.permute(0, 2, 1).contiguous()
-        print(pred_vars.shape)
         dtype = pred_scores.dtype
         imgsz = torch.tensor(feats[0].shape[2:], device=self.device, dtype=dtype) * self.stride[0]
         anchor_points, stride_tensor = make_anchors(feats, self.stride, 0.5)

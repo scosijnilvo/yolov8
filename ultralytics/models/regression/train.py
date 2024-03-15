@@ -1,5 +1,5 @@
 from copy import copy
-from ultralytics.utils import RANK
+from ultralytics.utils import RANK, DEFAULT_CFG
 from ultralytics.models import yolo, regression
 from ultralytics.nn.tasks import RegressionDetectionModel, RegressionSegmentationModel
 from ultralytics.data import build_custom_dataset
@@ -21,7 +21,7 @@ class RegressionDetectionTrainer(RegressionTrainer, yolo.detect.DetectionTrainer
 
     def get_model(self, cfg=None, weights=None, verbose=True):
         """Return RegressionDetectionModel initialized with specified config and extra vars."""
-        model = RegressionDetectionModel(cfg, ch=3, nc=self.data["nc"], nv=self.args["num_vars"], verbose=verbose and RANK == -1)
+        model = RegressionDetectionModel(cfg, ch=3, nc=self.data["nc"], num_vars=self.data["num_vars"], verbose=verbose and RANK == -1)
         if weights:
             model.load(weights)
         return model
@@ -43,7 +43,7 @@ class RegressionSegmentationTrainer(RegressionTrainer, yolo.segment.Segmentation
 
     def get_model(self, cfg=None, weights=None, verbose=True):
         """Return RegressionSegmentationModel initialized with specified config and extra vars."""
-        model = RegressionSegmentationModel(cfg, ch=3, nc=self.data["nc"], nv=self.args["num_vars"], verbose=verbose and RANK == -1)
+        model = RegressionSegmentationModel(cfg, ch=3, nc=self.data["nc"], num_vars=self.data["num_vars"], verbose=verbose and RANK == -1)
         if weights:
             model.load(weights)
         return model
