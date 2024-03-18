@@ -291,13 +291,13 @@ class RotatedTaskAlignedAssigner(TaskAlignedAssigner):
         return (ap_dot_ab >= 0) & (ap_dot_ab <= norm_ab) & (ap_dot_ad >= 0) & (ap_dot_ad <= norm_ad)  # is_in_box
 
 
-class WeightTaskAlignedAssigner(TaskAlignedAssigner):
+class CustomTaskAlignedAssigner(TaskAlignedAssigner):
     """
-    Extends `TaskAlignedAssigner` to include ground-truth assignment for object weights.
+    Extends `TaskAlignedAssigner` to include ground-truth assignment for extra variables.
     """
 
     @torch.no_grad()
-    def forward(self, pd_scores, pd_bboxes, pd_weights, anc_points, gt_labels, gt_bboxes, gt_weights, mask_gt):
+    def forward(self, pd_scores, pd_bboxes, pd_vars, anc_points, gt_labels, gt_bboxes, gt_vars, mask_gt):
         """
         Compute the task-aligned assignment. Reference code is available at
         https://github.com/Nioolek/PPYOLOE_pytorch/blob/master/ppyoloe/assigner/tal_assigner.py.
@@ -305,18 +305,18 @@ class WeightTaskAlignedAssigner(TaskAlignedAssigner):
         Args:
             pd_scores (Tensor): shape(bs, num_total_anchors, num_classes)
             pd_bboxes (Tensor): shape(bs, num_total_anchors, 4)
-            pd_weights (Tensor): shape(bs, num_total_anchors, 1)
+            pd_vars (Tensor): shape(bs, num_total_anchors, num_vars)
             anc_points (Tensor): shape(num_total_anchors, 2)
             gt_labels (Tensor): shape(bs, n_max_boxes, 1)
             gt_bboxes (Tensor): shape(bs, n_max_boxes, 4)
-            gt_weights (Tensor): shape(bs, n_max_boxes, 1)
+            gt_vars (Tensor): shape(bs, n_max_boxes, num_vars)
             mask_gt (Tensor): shape(bs, n_max_boxes, 1)
 
         Returns:
             target_labels (Tensor): shape(bs, num_total_anchors)
             target_bboxes (Tensor): shape(bs, num_total_anchors, 4)
             target_scores (Tensor): shape(bs, num_total_anchors, num_classes)
-            target_weights (Tensor): shape(bs, num_total_anchors, 1)
+            target_vars (Tensor): shape(bs, num_total_anchors, num_vars)
             fg_mask (Tensor): shape(bs, num_total_anchors)
             target_gt_idx (Tensor): shape(bs, num_total_anchors)
         """
@@ -329,7 +329,7 @@ class WeightTaskAlignedAssigner(TaskAlignedAssigner):
                 torch.full_like(pd_scores[..., 0], self.bg_idx).to(device),
                 torch.zeros_like(pd_bboxes).to(device),
                 torch.zeros_like(pd_scores).to(device),
-                torch.zeros_like(pd_weights).to(device),
+                torch.zeros_like(pd_vars).to(device),
                 torch.zeros_like(pd_scores[..., 0]).to(device),
                 torch.zeros_like(pd_scores[..., 0]).to(device),
             )
@@ -345,8 +345,8 @@ class WeightTaskAlignedAssigner(TaskAlignedAssigner):
             target_labels,
             target_bboxes,
             target_scores,
-            target_weights
-        ) = self.get_targets(gt_labels, gt_bboxes, gt_weights, target_gt_idx, fg_mask)
+            target_vars
+        ) = self.get_targets(gt_labels, gt_bboxes, gt_vars, target_gt_idx, fg_mask)
 
         # Normalize
         align_metric *= mask_pos
@@ -355,9 +355,9 @@ class WeightTaskAlignedAssigner(TaskAlignedAssigner):
         norm_align_metric = (align_metric * pos_overlaps / (pos_align_metrics + self.eps)).amax(-2).unsqueeze(-1)
         target_scores = target_scores * norm_align_metric
 
-        return target_labels, target_bboxes, target_scores, target_weights, fg_mask.bool(), target_gt_idx
+        return target_labels, target_bboxes, target_scores, target_vars, fg_mask.bool(), target_gt_idx
 
-    def get_targets(self, gt_labels, gt_bboxes, gt_weights, target_gt_idx, fg_mask):
+    def get_targets(self, gt_labels, gt_bboxes, gt_vars, target_gt_idx, fg_mask):
         """
         Compute target labels, target bounding boxes, and target scores for the positive anchor points.
 
@@ -365,7 +365,7 @@ class WeightTaskAlignedAssigner(TaskAlignedAssigner):
             gt_labels (Tensor): Ground truth labels of shape (b, max_num_obj, 1), where b is the
                                 batch size and max_num_obj is the maximum number of objects.
             gt_bboxes (Tensor): Ground truth bounding boxes of shape (b, max_num_obj, 4).
-            gt_weights (Tensor): Ground truth weights of shape (b, max_num_obj, 1).
+            gt_vars (Tensor): Ground truth vars of shape (b, max_num_obj, num_vars).
             target_gt_idx (Tensor): Indices of the assigned ground truth objects for positive
                                     anchor points, with shape (b, h*w), where h*w is the total
                                     number of anchor points.
@@ -381,7 +381,7 @@ class WeightTaskAlignedAssigner(TaskAlignedAssigner):
                 - target_scores (Tensor):  Shape (b, h*w, num_classes), containing the target scores
                                            for positive anchor points, where num_classes is the number
                                            of object classes.
-                - target_weights (Tensor): Shape (b, h*w, 1), containing the target weights for positive
+                - target_vars (Tensor): Shape (b, h*w, num_vars), containing the target vars for positive
                                            anchor points
         """
         # Assigned target labels, (b, 1)
@@ -406,9 +406,9 @@ class WeightTaskAlignedAssigner(TaskAlignedAssigner):
         fg_scores_mask = fg_mask[:, :, None].repeat(1, 1, self.num_classes)  # (b, h*w, 80)
         target_scores = torch.where(fg_scores_mask > 0, target_scores, 0)
 
-        target_weights = gt_weights.view(-1, 1)[target_gt_idx]
+        target_vars = gt_vars.view(-1, gt_vars.shape[-1])[target_gt_idx]
 
-        return target_labels, target_bboxes, target_scores, target_weights
+        return target_labels, target_bboxes, target_scores, target_vars
 
 
 def make_anchors(feats, strides, grid_cell_offset=0.5):

@@ -52,7 +52,7 @@ max_det: 300 # (int) maximum number of detections per image
 half: False # (bool) use half precision (FP16)
 dnn: False # (bool) use OpenCV DNN for ONNX inference
 plots: True # (bool) save plots and images during train/val
-weight_fitness: False # (bool) include fitness of weight to determine early stopping
+reg_fitness: False # (bool) include fitness of regression to determine early stopping
 
 # Predict settings -----------------------------------------------------------------------------------------------------
 source: # (str, optional) source directory for images or videos
@@ -100,7 +100,7 @@ cls: 0.5 # (float) cls loss gain (scale with pixels)
 dfl: 1.5 # (float) dfl loss gain
 pose: 12.0 # (float) pose loss gain
 kobj: 1.0 # (float) keypoint obj loss gain
-wgt: 0.05 # (float) weight loss gain
+reg: 1.0 # (float) regression loss gain
 label_smoothing: 0.0 # (float) label smoothing (fraction)
 nbs: 64 # (int) nominal batch size
 hsv_h: 0.015 # (float) image HSV-Hue augmentation (fraction)
@@ -119,7 +119,6 @@ copy_paste: 0.0 # (float) segment copy-paste (probability)
 auto_augment: randaugment # (str) auto augmentation policy for classification (randaugment, autoaugment, augmix)
 erasing: 0.4 # (float) probability of random erasing during classification training (0-1)
 crop_fraction: 1.0 # (float) image crop fraction for classification evaluation/inference (0-1)
-weighted_loss: False
 
 # Custom config.yaml ---------------------------------------------------------------------------------------------------
 cfg: # (str, optional) for overriding defaults.yaml

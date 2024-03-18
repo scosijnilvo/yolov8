@@ -5,7 +5,6 @@ from ultralytics.models.yolo.segment import SegmentationValidator
 from ultralytics.utils import ops
 from ultralytics.utils.metrics import box_iou
 from ultralytics.utils.metrics import WeightSegmentMetrics, WeightDetMetrics
-from ultralytics.utils.plotting import output_to_target, plot_images
 from ultralytics.data.build import build_custom_dataset
 
 
@@ -16,7 +15,7 @@ class RegressionValidator():
         """Prepares a batch of images and annotations for validation."""
         prepared_batch = super()._prepare_batch(si, batch)
         idx = batch["batch_idx"] == si
-        prepared_batch["extra_vars"] = batch["extra_vars"][idx].squeeze(-1)
+        prepared_batch["extra_vars"] = batch["extra_vars"][idx]
         return prepared_batch
 
     def _process_batch_vars(self, pred, gt_bboxes, gt_cls, gt_vars):
@@ -26,7 +25,7 @@ class RegressionValidator():
         """
         conf = 0.25 if self.args.conf in (None, 0.001) else self.args.conf
         pred = pred[pred[:, 4] > conf]
-        pred_vars = pred[:, -1]
+        pred_vars = pred[:, -self.num_vars:]
         pred_cls = pred[:, 5]
         correct_class = gt_cls[:, None] == pred_cls
         iou = box_iou(gt_bboxes, pred[:, :4])
@@ -62,13 +61,15 @@ class RegressionDetectionValidator(RegressionValidator, DetectionValidator):
     def __init__(self, dataloader=None, save_dir=None, pbar=None, args=None, _callbacks=None):
         """Initialize the validator with `RegressionDetMetrics`."""
         super().__init__(dataloader, save_dir, pbar, args, _callbacks)
-        weight_fitness = args.weight_fitness if "weight_fitness" in args else False
-        self.metrics = WeightDetMetrics(save_dir=self.save_dir, on_plot=self.on_plot, weight_fitness=weight_fitness)
+        reg_fitness = args.reg_fitness if "reg_fitness" in args else False
+        self.metrics = WeightDetMetrics(save_dir=self.save_dir, on_plot=self.on_plot, reg_fitness=reg_fitness)
+        self.num_vars = None # value set during postprocess
 
     def postprocess(self, preds):
         """Apply Non-maximum suppression to prediction outputs."""
+        self.num_vars = preds[1][1].shape[1]
         return ops.non_max_suppression(
-            preds,
+            preds[0],
             self.args.conf,
             self.args.iou,
             labels=self.lb,
@@ -98,7 +99,7 @@ class RegressionDetectionValidator(RegressionValidator, DetectionValidator):
                 conf=torch.zeros(0, device=self.device),
                 pred_cls=torch.zeros(0, device=self.device),
                 tp=torch.zeros(npr, self.niou, dtype=torch.bool, device=self.device),
-                tp_vars=torch.zeros(0, device=self.device)
+                tp_vars=torch.zeros(self.num_vars, device=self.device)
             )
             pbatch = self._prepare_batch(si, batch)
             cls, bbox, extra_vars = pbatch.pop("cls"), pbatch.pop("bbox"), pbatch.pop("extra_vars")
@@ -136,7 +137,7 @@ class RegressionDetectionValidator(RegressionValidator, DetectionValidator):
         """Serialize predictions to json."""
         super().pred_to_json(predn, filename)
         for i, p in enumerate(predn):
-            self.jdict[i]["extra_vars"] = p[:, -1]
+            self.jdict[i]["extra_vars"] = p[:, -self.num_vars:]
 
     def get_desc(self):
         """Return a formatted description of evaluation metrics."""
@@ -160,8 +161,9 @@ class RegressionSegmentationValidator(RegressionValidator, SegmentationValidator
     def __init__(self, dataloader=None, save_dir=None, pbar=None, args=None, _callbacks=None):
         """Initialize the validator with `RegressionSegmentMetrics`."""
         super().__init__(dataloader, save_dir, pbar, args, _callbacks)
-        weight_fitness = args.weight_fitness if "weight_fitness" in args else False
-        self.metrics = WeightSegmentMetrics(save_dir=self.save_dir, on_plot=self.on_plot, weight_fitness=weight_fitness)
+        reg_fitness = args.reg_fitness if "reg_fitness" in args else False
+        self.metrics = WeightSegmentMetrics(save_dir=self.save_dir, on_plot=self.on_plot, reg_fitness=reg_fitness)
+        self.num_vars = None # value set during postprocess
 
     def _prepare_pred(self, pred, pbatch, proto):
         """Prepares a batch for training or inference by processing images and targets."""
@@ -169,11 +171,12 @@ class RegressionSegmentationValidator(RegressionValidator, SegmentationValidator
         ops.scale_boxes(
             pbatch["imgsz"], predn[:, :4], pbatch["ori_shape"], ratio_pad=pbatch["ratio_pad"]
         )  # native-space pred
-        pred_masks = self.process(proto, pred[:, 6:-1], pred[:, :4], shape=pbatch["imgsz"])
+        pred_masks = self.process(proto, pred[:, 6:-self.num_vars], pred[:, :4], shape=pbatch["imgsz"])
         return predn, pred_masks
 
     def postprocess(self, preds):
         """Post-processes predictions and returns output detections with proto."""
+        self.num_vars = preds[1][3].shape[1]
         p = ops.non_max_suppression(
             preds[0],
             self.args.conf,
@@ -209,7 +212,7 @@ class RegressionSegmentationValidator(RegressionValidator, SegmentationValidator
                 pred_cls=torch.zeros(0, device=self.device),
                 tp=torch.zeros(npr, self.niou, dtype=torch.bool, device=self.device),
                 tp_m=torch.zeros(npr, self.niou, dtype=torch.bool, device=self.device),
-                tp_vars=torch.zeros(0, device=self.device)
+                tp_vars=torch.zeros(self.num_vars, device=self.device)
             )
             pbatch = self._prepare_batch(si, batch)
             cls, bbox, extra_vars = pbatch.pop("cls"), pbatch.pop("bbox"), pbatch.pop("extra_vars")
@@ -262,7 +265,7 @@ class RegressionSegmentationValidator(RegressionValidator, SegmentationValidator
         """Serialize predictions to json."""
         super().pred_to_json(predn, filename, pred_masks)
         for i, p in enumerate(predn):
-            self.jdict[i]["extra_vars"] = p[:, -1]
+            self.jdict[i]["extra_vars"] = p[:, -self.num_vars:]
 
     def get_desc(self):
         """Return a formatted description of evaluation metrics."""

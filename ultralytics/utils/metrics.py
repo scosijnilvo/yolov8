@@ -1406,11 +1406,11 @@ class WeightDetMetrics(DetMetrics):
     Calculates and aggregates detection and weight metrics over a given set of classes.
     """
 
-    def __init__(self, save_dir=Path("."), plot=False, on_plot=None, names=(), weight_fitness=False):
-        """Initialize a `WeightDetMetrics` instance with save directory, plot flag, callback function, class names, and weight_fitness flag."""
+    def __init__(self, save_dir=Path("."), plot=False, on_plot=None, names=(), reg_fitness=False):
+        """Initialize a `WeightDetMetrics` instance with save directory, plot flag, callback function, class names, and reg_fitness flag."""
         super().__init__(save_dir, plot, on_plot, names)
         self.weight = WeightMetric()
-        self.weight_fitness = weight_fitness
+        self.reg_fitness = reg_fitness
     
     def process(self, tp, conf, pred_cls, target_cls, tp_w):
         """Processes the detection and weight metrics over the given set of predictions."""
@@ -1439,9 +1439,9 @@ class WeightDetMetrics(DetMetrics):
     def fitness(self):
         """
         Fitness score for bounding box and weight (optional).
-        Use parameter weight_fitness=True to include weight.
+        Use parameter reg_fitness=True to include weight.
         """
-        if self.weight_fitness:
+        if self.reg_fitness:
             return self.box.fitness() + self.weight.fitness()
         return self.box.fitness()
 
@@ -1460,11 +1460,11 @@ class WeightSegmentMetrics(SegmentMetrics):
     Calculates and aggregates detection, segmentation, and weight metrics over a given set of classes.
     """
 
-    def __init__(self, save_dir=Path("."), plot=False, on_plot=None, names=(), weight_fitness=False):
-        """Initialize a `WeightSegmentMetrics` instance with save directory, plot flag, callback function, class names, and weight_fitness flag."""
+    def __init__(self, save_dir=Path("."), plot=False, on_plot=None, names=(), reg_fitness=False):
+        """Initialize a `WeightSegmentMetrics` instance with save directory, plot flag, callback function, class names, and reg_fitness flag."""
         super().__init__(save_dir, plot, on_plot, names)
         self.weight = WeightMetric()
-        self.weight_fitness = weight_fitness
+        self.reg_fitness = reg_fitness
 
     def process(self, tp, tp_m, conf, pred_cls, target_cls, tp_w):
         """Processes the detection, segmentation, and weight metrics over the given set of predictions."""
@@ -1493,9 +1493,9 @@ class WeightSegmentMetrics(SegmentMetrics):
     def fitness(self):
         """
         Fitness score for bounding box, segmentation, and weight (optional).
-        Use parameter weight_fitness=True to include weight.
+        Use parameter reg_fitness=True to include weight.
         """
-        if self.weight_fitness:
+        if self.reg_fitness:
             return self.box.fitness() + self.seg.fitness() + self.weight.fitness()
         return self.box.fitness() + self.seg.fitness()
 

@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from ultralytics.utils.metrics import OKS_SIGMA
 from ultralytics.utils.ops import crop_mask, xywh2xyxy, xyxy2xywh
 from ultralytics.utils.tal import RotatedTaskAlignedAssigner, TaskAlignedAssigner, dist2bbox, dist2rbox, make_anchors
-from ultralytics.utils.tal import WeightTaskAlignedAssigner
+from ultralytics.utils.tal import CustomTaskAlignedAssigner
 from .metrics import bbox_iou, probiou
 from .tal import bbox2dist
 
@@ -726,7 +726,7 @@ class RegressionLoss():
         alpha = self.assigner.alpha
         beta = self.assigner.beta
         # create new task-aligned assigner that includes ground-truth values for extra variables
-        self.assigner = WeightTaskAlignedAssigner(topk=topk, num_classes=self.nc, alpha=alpha, beta=beta)
+        self.assigner = CustomTaskAlignedAssigner(topk=topk, num_classes=self.nc, alpha=alpha, beta=beta)
 
     def preprocess(self, targets, batch_size, scale_tensor):
         """Preprocesses the target counts and matches with the input batch size to output a tensor."""
