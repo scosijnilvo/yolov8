@@ -617,28 +617,14 @@ def ap_per_class(
     return tp, fp, p, r, f1, ap, unique_classes.astype(int), p_curve, r_curve, f1_curve, x, prec_values
 
 
-def error_per_class(
-    target_cls,
-    tp_w,
-    plot=False,
-    on_plot=None,
-    save_dir=Path(),
-    names=(),
-    eps=1e-16,
-    prefix=""
-):
+def error_per_class(target_cls, tp_v, eps=1e-16):
     """
-    Computes the error metrics per class for object weight evaluation.
+    Computes the regression error metrics per class.
 
     Args:
         target_cls (np.ndarray): Array of true classes of the detections.
-        tp_w (np.ndarray): Array with true weights, predicted weights, and predicted classes of the detections.
-        plot (bool, optional): Plot error metrics. Defaults to False.
-        on_plot (func, optional): A callback to pass plots path and data when they are rendered. Defaults to None.
-        save_dir (Path, optional): Directory to save the plots. Defaults to an empty path.
-        names (tuple, optional): Tuple of class names used for plotting. Defaults to an empty tuple.
+        tp_v (np.ndarray): Array with true values, predicted values, and predicted classes.
         eps (float, optional): A small value to avoid division by zero. Defaults to 1e-16.
-        prefix (str, optional): A prefix string for saving the plot files. Defaults to an empty string.
 
     Returns:
         (tuple): A tuple of 4 arrays, where:
@@ -657,7 +643,7 @@ def error_per_class(
     rmse = np.full(num_cls, np.nan)
     weights_dict = {c: ([], []) for c in unique_cls}
 
-    for tp in tp_w:
+    for tp in tp_v:
         tar, pred, c = tp[0], tp[1], tp[2]
         weights_dict[c][0].append(tar)
         weights_dict[c][1].append(pred)
@@ -670,8 +656,6 @@ def error_per_class(
             mae[i] = np.mean(np.abs(y_pred - y_true))
             mape[i] = np.mean(np.abs(y_pred - y_true) / np.maximum(np.abs(y_true), eps))
             rmse[i] = np.sqrt(np.mean((y_pred - y_true) ** 2))
-
-    # TODO: plot
 
     return mae, mape, rmse, unique_cls.astype(int)
 
@@ -1348,11 +1332,11 @@ class OBBMetrics(SimpleClass):
         return []
 
 
-class WeightMetric(SimpleClass):
-    """Class for computing all evaluation metrics related to object weight."""
+class RegressionMetric(SimpleClass):
+    """Class for computing all evaluation metrics related to regression."""
 
     def __init__(self):
-        """Initializes a WeightMetric instance for computing evaluation metrics for the model."""
+        """Initializes a RegressionMetric instance for computing evaluation metrics for the model."""
         self.all_mae = []
         self.all_mape = []
         self.all_rmse = []
@@ -1401,109 +1385,93 @@ class WeightMetric(SimpleClass):
         self.all_mae, self.all_mape, self.all_rmse, self.class_index = results
 
 
-class WeightDetMetrics(DetMetrics):
+class RegressionDetMetrics(DetMetrics):
     """
-    Calculates and aggregates detection and weight metrics over a given set of classes.
+    Calculates and aggregates detection and regression metrics over a given set of classes.
     """
 
     def __init__(self, save_dir=Path("."), plot=False, on_plot=None, names=(), reg_fitness=False):
-        """Initialize a `WeightDetMetrics` instance with save directory, plot flag, callback function, class names, and reg_fitness flag."""
+        """Initialize a `RegressionDetMetrics` instance with save directory, plot flag, callback function, class names, and reg_fitness flag."""
         super().__init__(save_dir, plot, on_plot, names)
-        self.weight = WeightMetric()
+        self.reg = RegressionMetric()
         self.reg_fitness = reg_fitness
     
-    def process(self, tp, conf, pred_cls, target_cls, tp_w):
-        """Processes the detection and weight metrics over the given set of predictions."""
+    def process(self, tp, conf, pred_cls, target_cls, tp_v):
+        """Processes the detection and regression metrics over the given set of predictions."""
         super().process(tp, conf, pred_cls, target_cls)
-        results_weight = error_per_class(
-            target_cls,
-            tp_w,
-            plot=self.plot,
-            on_plot=self.on_plot,
-            save_dir=self.save_dir,
-            names=self.names,
-            prefix="Weight"
-        )
-        self.weight.nc = len(self.names)
-        self.weight.update(results_weight)
+        results = error_per_class(target_cls, tp_v)
+        self.reg.nc = len(self.names)
+        self.reg.update(results)
 
     def mean_results(self):
-        """Return the mean results of box and weight."""
-        return self.box.mean_results() + self.weight.mean_results()
+        """Return the mean results of box and regression."""
+        return self.box.mean_results() + self.reg.mean_results()
 
     def class_result(self, i):
         """Return the class-wise results for a specific class i."""
-        return self.box.class_result(i) + self.weight.class_result(i)
+        return self.box.class_result(i) + self.reg.class_result(i)
 
     @property
     def fitness(self):
         """
-        Fitness score for bounding box and weight (optional).
-        Use parameter reg_fitness=True to include weight.
+        Fitness score for bounding box and regression (optional).
+        Use parameter reg_fitness=True to include regression.
         """
         if self.reg_fitness:
-            return self.box.fitness() + self.weight.fitness()
+            return self.box.fitness() + self.reg.fitness()
         return self.box.fitness()
 
     @property
     def keys(self):
         """List of keys for all metrics."""
         keys = super().keys
-        keys.append("metrics/MAE(W)")
-        keys.append("metrics/MAPE(W)")
-        keys.append("metrics/RMSE(W)")
+        keys.append("metrics/MAE")
+        keys.append("metrics/MAPE")
+        keys.append("metrics/RMSE")
         return keys
 
 
-class WeightSegmentMetrics(SegmentMetrics):
+class RegressionSegmentMetrics(SegmentMetrics):
     """
-    Calculates and aggregates detection, segmentation, and weight metrics over a given set of classes.
+    Calculates and aggregates detection, segmentation, and regression metrics over a given set of classes.
     """
 
     def __init__(self, save_dir=Path("."), plot=False, on_plot=None, names=(), reg_fitness=False):
         """Initialize a `WeightSegmentMetrics` instance with save directory, plot flag, callback function, class names, and reg_fitness flag."""
         super().__init__(save_dir, plot, on_plot, names)
-        self.weight = WeightMetric()
+        self.reg = RegressionMetric()
         self.reg_fitness = reg_fitness
 
-    def process(self, tp, tp_m, conf, pred_cls, target_cls, tp_w):
-        """Processes the detection, segmentation, and weight metrics over the given set of predictions."""
+    def process(self, tp, tp_m, conf, pred_cls, target_cls, tp_v):
+        """Processes the detection, segmentation, and regression metrics over the given set of predictions."""
         super().process(tp, tp_m, conf, pred_cls, target_cls)
-        results_weight = error_per_class(
-            target_cls,
-            tp_w,
-            plot=self.plot,
-            on_plot=self.on_plot,
-            save_dir=self.save_dir,
-            names=self.names,
-            prefix="Weight"
-        )
-        self.weight.nc = len(self.names)
-        self.weight.update(results_weight)
+        results_weight = error_per_class(target_cls, tp_v)
+        self.reg.nc = len(self.names)
+        self.reg.update(results_weight)
 
     def mean_results(self):
-        """Return the mean results of box, segment, and weight."""
-        return self.box.mean_results() + self.seg.mean_results() + self.weight.mean_results()
+        """Return the mean results of box, segment, and regression."""
+        return self.box.mean_results() + self.seg.mean_results() + self.reg.mean_results()
 
     def class_result(self, i):
         """Return the class-wise results for a specific class i."""
-        return self.box.class_result(i) + self.seg.class_result(i) + self.weight.class_result(i)
+        return self.box.class_result(i) + self.seg.class_result(i) + self.reg.class_result(i)
 
     @property
     def fitness(self):
         """
-        Fitness score for bounding box, segmentation, and weight (optional).
-        Use parameter reg_fitness=True to include weight.
+        Fitness score for bounding box, segmentation, and regression (optional).
+        Use parameter reg_fitness=True to include regression.
         """
         if self.reg_fitness:
-            return self.box.fitness() + self.seg.fitness() + self.weight.fitness()
+            return self.box.fitness() + self.seg.fitness() + self.reg.fitness()
         return self.box.fitness() + self.seg.fitness()
 
     @property
     def keys(self):
         """List of keys for all metrics."""
         keys = super().keys
-        keys.append("metrics/MAE(W)")
-        keys.append("metrics/MAPE(W)")
-        keys.append("metrics/RMSE(W)")
+        keys.append("metrics/MAE")
+        keys.append("metrics/MAPE")
+        keys.append("metrics/RMSE")
         return keys

@@ -4,7 +4,7 @@ from ultralytics.models.yolo.detect import DetectionValidator
 from ultralytics.models.yolo.segment import SegmentationValidator
 from ultralytics.utils import ops
 from ultralytics.utils.metrics import box_iou
-from ultralytics.utils.metrics import WeightSegmentMetrics, WeightDetMetrics
+from ultralytics.utils.metrics import RegressionSegmentMetrics, RegressionDetMetrics
 from ultralytics.data.build import build_custom_dataset
 
 
@@ -62,7 +62,7 @@ class RegressionDetectionValidator(RegressionValidator, DetectionValidator):
         """Initialize the validator with `RegressionDetMetrics`."""
         super().__init__(dataloader, save_dir, pbar, args, _callbacks)
         reg_fitness = args.reg_fitness if "reg_fitness" in args else False
-        self.metrics = WeightDetMetrics(save_dir=self.save_dir, on_plot=self.on_plot, reg_fitness=reg_fitness)
+        self.metrics = RegressionDetMetrics(save_dir=self.save_dir, on_plot=self.on_plot, reg_fitness=reg_fitness)
         self.num_vars = None # value set during postprocess
 
     def postprocess(self, preds):
@@ -162,7 +162,7 @@ class RegressionSegmentationValidator(RegressionValidator, SegmentationValidator
         """Initialize the validator with `RegressionSegmentMetrics`."""
         super().__init__(dataloader, save_dir, pbar, args, _callbacks)
         reg_fitness = args.reg_fitness if "reg_fitness" in args else False
-        self.metrics = WeightSegmentMetrics(save_dir=self.save_dir, on_plot=self.on_plot, reg_fitness=reg_fitness)
+        self.metrics = RegressionSegmentMetrics(save_dir=self.save_dir, on_plot=self.on_plot, reg_fitness=reg_fitness)
         self.num_vars = None # value set during postprocess
 
     def _prepare_pred(self, pred, pbatch, proto):
