@@ -318,21 +318,6 @@ class RegressionSegmentationValidator(RegressionValidator, SegmentationValidator
             "RMSE)"
         )
 
-    def plot_val_samples(self, batch, ni):
-        """Plots validation samples with masks, bounding box labels, and variable values."""
-        plot_images(
-            batch["img"],
-            batch["batch_idx"],
-            batch["cls"].squeeze(-1),
-            batch["bboxes"],
-            masks=batch["masks"],
-            paths=batch["im_file"],
-            fname=self.save_dir / f"val_batch{ni}_labels.jpg",
-            names=self.names,
-            on_plot=self.on_plot,
-            extra_vars=batch["extra_vars"]
-        )
-    
     def plot_predictions(self, batch, preds, ni):
         """Plots batch predictions with masks, bounding boxes, and predicted values."""
         max_det = 15 # not set to self.args.max_det due to slow plotting speed
