@@ -1376,7 +1376,7 @@ class RegressionMetric(SimpleClass):
         """Fitness value used to determine best model for early stopping."""
         if np.isnan(self.mape):
             return 0
-        return 1 - self.mape
+        return max(1 - self.mape, 0)
 
     def update(self, results):
         """
