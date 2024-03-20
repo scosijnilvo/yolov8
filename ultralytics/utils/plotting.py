@@ -714,6 +714,7 @@ def plot_images(
     max_subplots=16,
     save=True,
     conf_thres=0.25,
+    extra_vars=np.zeros(0, dtype=np.float32),
 ):
     """Plot image grid with labels."""
     if isinstance(images, torch.Tensor):
@@ -728,6 +729,8 @@ def plot_images(
         kpts = kpts.cpu().numpy()
     if isinstance(batch_idx, torch.Tensor):
         batch_idx = batch_idx.cpu().numpy()
+    if isinstance(extra_vars, torch.Tensor):
+        extra_vars = extra_vars.cpu().numpy()
 
     max_size = 1920  # max image size
     bs, _, h, w = images.shape  # batch size, _, height, width
@@ -775,12 +778,21 @@ def plot_images(
                         boxes[..., :4] *= scale
                 boxes[..., 0::2] += x
                 boxes[..., 1::2] += y
+                v = extra_vars[idx] if len(extra_vars) else None
                 for j, box in enumerate(boxes.astype(np.int64).tolist()):
                     c = classes[j]
                     color = colors(c)
                     c = names.get(c, c) if names else c
                     if labels or conf[j] > conf_thres:
-                        label = f"{c}" if labels else f"{c} {conf[j]:.1f}"
+                        if v is not None:
+                            v_txt = ""
+                            for i in range(min(len(v[j]), 5)): # limit label text to max 5 vars
+                                v_txt += str(round(v[j][i], 2)) + " "
+                            if len(v[j]) > 5:
+                                v_txt += "..."
+                            label = f"{c} [{v_txt.rstrip()}]" if labels else f"{c} {conf[j]:.1f} [{v_txt.rstrip()}]"
+                        else:
+                            label = f"{c}" if labels else f"{c} {conf[j]:.1f}"
                         annotator.box_label(box, label, color=color, rotated=is_obb)
 
             elif len(classes):

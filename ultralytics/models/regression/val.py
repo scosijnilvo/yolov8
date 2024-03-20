@@ -5,6 +5,7 @@ from ultralytics.models.yolo.segment import SegmentationValidator
 from ultralytics.utils import ops
 from ultralytics.utils.metrics import box_iou
 from ultralytics.utils.metrics import RegressionSegmentMetrics, RegressionDetMetrics
+from ultralytics.utils.plotting import output_to_target, plot_images
 from ultralytics.data.build import build_custom_dataset
 
 
@@ -53,6 +54,21 @@ class RegressionValidator():
     def build_dataset(self, img_path, mode="val", batch=None):
         """Build a `CustomDataset` in val mode."""
         return build_custom_dataset(self.args, img_path, batch, self.data, mode=mode, stride=self.stride)
+
+    def plot_val_samples(self, batch, ni):
+        """Plots validation samples with bounding box labels, masks (if segmentation), and variable values."""
+        plot_images(
+            batch["img"],
+            batch["batch_idx"],
+            batch["cls"].squeeze(-1),
+            batch["bboxes"],
+            masks=batch.get("masks", np.zeros(0, dtype=np.uint8)),
+            paths=batch["im_file"],
+            fname=self.save_dir / f"val_batch{ni}_labels.jpg",
+            names=self.names,
+            on_plot=self.on_plot,
+            extra_vars=batch["extra_vars"]
+        )
 
 
 class RegressionDetectionValidator(RegressionValidator, DetectionValidator):
@@ -152,6 +168,22 @@ class RegressionDetectionValidator(RegressionValidator, DetectionValidator):
             "Reg(MAE",
             "MAPE",
             "RMSE)"
+        )
+
+    def plot_predictions(self, batch, preds, ni):
+        """Plots batch predictions with bounding boxes and predicted values."""
+        extra_vars = []
+        for p in preds:
+            extra_vars.append(p[:self.args.max_det, -self.num_vars:].cpu())
+        extra_vars = torch.cat(extra_vars, 0).numpy()
+        plot_images(
+            batch["img"],
+            *output_to_target(preds, max_det=self.args.max_det),
+            paths=batch["im_file"],
+            fname=self.save_dir / f"val_batch{ni}_pred.jpg",
+            names=self.names,
+            on_plot=self.on_plot,
+            extra_vars=extra_vars
         )
 
 
@@ -285,3 +317,37 @@ class RegressionSegmentationValidator(RegressionValidator, SegmentationValidator
             "MAPE",
             "RMSE)"
         )
+
+    def plot_val_samples(self, batch, ni):
+        """Plots validation samples with masks, bounding box labels, and variable values."""
+        plot_images(
+            batch["img"],
+            batch["batch_idx"],
+            batch["cls"].squeeze(-1),
+            batch["bboxes"],
+            masks=batch["masks"],
+            paths=batch["im_file"],
+            fname=self.save_dir / f"val_batch{ni}_labels.jpg",
+            names=self.names,
+            on_plot=self.on_plot,
+            extra_vars=batch["extra_vars"]
+        )
+    
+    def plot_predictions(self, batch, preds, ni):
+        """Plots batch predictions with masks, bounding boxes, and predicted values."""
+        max_det = 15 # not set to self.args.max_det due to slow plotting speed
+        extra_vars = []
+        for p in preds[0]:
+            extra_vars.append(p[:max_det, -self.num_vars:].cpu())
+        extra_vars = torch.cat(extra_vars, 0).numpy()
+        plot_images(
+            batch["img"],
+            *output_to_target(preds[0], max_det=max_det),
+            torch.cat(self.plot_masks, dim=0) if len(self.plot_masks) else self.plot_masks,
+            paths=batch["im_file"],
+            fname=self.save_dir / f"val_batch{ni}_pred.jpg",
+            names=self.names,
+            on_plot=self.on_plot,
+            extra_vars=extra_vars
+        )
+        self.plot_masks.clear()
