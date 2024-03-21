@@ -42,8 +42,12 @@ class RegressionValidator():
         tp_vars = []
         for tp in tp_idx:
             gt_idx, pred_idx = tp[0], tp[1]
-            tp_vars.append([gt_vars[gt_idx], pred_vars[pred_idx], pred_cls[pred_idx]])
-        return torch.tensor(tp_vars, device=pred.device)
+            tp_vars.append(torch.stack([
+                gt_vars[gt_idx],
+                pred_vars[pred_idx],
+                pred_cls[pred_idx].expand(self.num_vars)
+            ]))
+        return torch.stack(tp_vars) if tp_vars else torch.zeros(0, 3, self.num_vars, device=pred.device)
 
     def preprocess(self, batch):
         """Preprocesses batch by sending extra_vars to device."""
@@ -115,7 +119,7 @@ class RegressionDetectionValidator(RegressionValidator, DetectionValidator):
                 conf=torch.zeros(0, device=self.device),
                 pred_cls=torch.zeros(0, device=self.device),
                 tp=torch.zeros(npr, self.niou, dtype=torch.bool, device=self.device),
-                tp_vars=torch.zeros(self.num_vars, device=self.device)
+                tp_vars=torch.zeros(0, 3, self.num_vars, device=self.device)
             )
             pbatch = self._prepare_batch(si, batch)
             cls, bbox, extra_vars = pbatch.pop("cls"), pbatch.pop("bbox"), pbatch.pop("extra_vars")
@@ -244,7 +248,7 @@ class RegressionSegmentationValidator(RegressionValidator, SegmentationValidator
                 pred_cls=torch.zeros(0, device=self.device),
                 tp=torch.zeros(npr, self.niou, dtype=torch.bool, device=self.device),
                 tp_m=torch.zeros(npr, self.niou, dtype=torch.bool, device=self.device),
-                tp_vars=torch.zeros(self.num_vars, device=self.device)
+                tp_vars=torch.zeros(0, 3, self.num_vars, device=self.device)
             )
             pbatch = self._prepare_batch(si, batch)
             cls, bbox, extra_vars = pbatch.pop("cls"), pbatch.pop("bbox"), pbatch.pop("extra_vars")

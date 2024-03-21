@@ -617,45 +617,46 @@ def ap_per_class(
     return tp, fp, p, r, f1, ap, unique_classes.astype(int), p_curve, r_curve, f1_curve, x, prec_values
 
 
-def error_per_class(target_cls, tp_v, eps=1e-16):
+def error_per_class(target_cls, tp_vars, eps=np.finfo(float).eps):
     """
     Computes the regression error metrics per class.
 
     Args:
         target_cls (np.ndarray): Array of true classes of the detections.
-        tp_v (np.ndarray): Array with true values, predicted values, and predicted classes.
-        eps (float, optional): A small value to avoid division by zero. Defaults to 1e-16.
+        tp_vars (np.ndarray): Array with true values, predicted values, and predicted classes.
+        eps (float, optional): A small value to avoid division by zero.
 
     Returns:
         (tuple): A tuple of 4 arrays, where:
-            mae (np.ndarray): Mean absolute error for each class. Shape: (nc,).
-            mape (np.ndarray): Mean absolute percentage error for each class. Shape: (nc,).
-            rmse (np.ndarray): Root mean square error for each class. Shape: (nc,).
+            mae (np.ndarray): Mean absolute error for each var grouped by class. Shape: (nc, num_vars).
+            mape (np.ndarray): Mean absolute percentage error for each var grouped by class. Shape: (nc, num_vars).
+            rmse (np.ndarray): Root mean square error for each var grouped by class. Shape: (nc, num_vars).
             unique_classes (np.ndarray): An array of unique classes that have data. Shape: (nc,).
     """
 
     unique_cls = np.unique(target_cls)
     num_cls = unique_cls.shape[0]
+    num_vars = tp_vars.shape[-1]
 
     # Calculate metrics for each class
-    mae = np.full(num_cls, np.nan)
-    mape = np.full(num_cls, np.nan)
-    rmse = np.full(num_cls, np.nan)
-    weights_dict = {c: ([], []) for c in unique_cls}
+    mae = np.full((num_cls, num_vars), np.nan)
+    mape = np.full((num_cls, num_vars), np.nan)
+    rmse = np.full((num_cls, num_vars), np.nan)
+    vars_dict = {c: ([], []) for c in unique_cls}
 
-    for tp in tp_v:
-        tar, pred, c = tp[0], tp[1], tp[2]
-        weights_dict[c][0].append(tar)
-        weights_dict[c][1].append(pred)
+    for tp in tp_vars:
+        tar, pred, c = tp[0, :], tp[1, :], tp[2, 0]
+        vars_dict[c][0].append(tar)
+        vars_dict[c][1].append(pred)
 
     for i, c in enumerate(unique_cls):
-        y_true, y_pred = weights_dict[c] # targets, predictions
+        y_true, y_pred = vars_dict[c] # targets, predictions
         y_true = np.asarray(y_true)
         y_pred = np.asarray(y_pred)
         if y_pred.size > 0:
-            mae[i] = np.mean(np.abs(y_pred - y_true))
-            mape[i] = np.mean(np.abs(y_pred - y_true) / np.maximum(np.abs(y_true), eps))
-            rmse[i] = np.sqrt(np.mean((y_pred - y_true) ** 2))
+            mae[i] = np.mean(np.abs(y_pred - y_true), axis=0)
+            mape[i] = np.mean(np.abs(y_pred - y_true) / np.maximum(np.abs(y_true), eps), axis=0)
+            rmse[i] = np.sqrt(np.mean((y_pred - y_true) ** 2, axis=0))
 
     return mae, mape, rmse, unique_cls.astype(int)
 
@@ -1337,32 +1338,36 @@ class RegressionMetric(SimpleClass):
 
     def __init__(self):
         """Initializes a RegressionMetric instance for computing evaluation metrics for the model."""
-        self.all_mae = []
-        self.all_mape = []
-        self.all_rmse = []
-        self.class_index = []
         self.nc = 0 # number of classes
+        self.all_mae = [] # (nc, num_vars)
+        self.all_mape = [] # (nc, num_vars)
+        self.all_rmse = [] # (nc, num_vars)
+        self.class_index = [] # (nc, )
 
     @property
     def mae(self):
         """Mean of MAE for all classes."""
         if np.isnan(self.all_mae).all():
-            return np.nan
-        return np.nanmean(self.all_mae)
+            return np.full(self.all_mae.shape[-1], np.nan)
+        return np.nanmean(self.all_mae, axis=0)
 
     @property
     def mape(self):
         """Mean of MAPE for all classes."""
         if np.isnan(self.all_mape).all():
-            return np.nan
-        return np.nanmean(self.all_mape)
+            return np.full(self.all_mape.shape[-1], np.nan)
+        return np.nanmean(self.all_mape, axis=0)
 
     @property
     def rmse(self):
         """Mean of RMSE for all classes."""
         if np.isnan(self.all_rmse).all():
-            return np.nan
-        return np.nanmean(self.all_rmse)
+            return np.full(self.all_rmse.shape[-1], np.nan)
+        return np.nanmean(self.all_rmse, axis=0)
+    
+    @property
+    def combined_mape(self):
+        """TODO"""
 
     def mean_results(self):
         """Returns a list of all metrics."""
@@ -1396,10 +1401,10 @@ class RegressionDetMetrics(DetMetrics):
         self.reg = RegressionMetric()
         self.reg_fitness = reg_fitness
     
-    def process(self, tp, conf, pred_cls, target_cls, tp_v):
+    def process(self, tp, conf, pred_cls, target_cls, tp_vars):
         """Processes the detection and regression metrics over the given set of predictions."""
         super().process(tp, conf, pred_cls, target_cls)
-        results = error_per_class(target_cls, tp_v)
+        results = error_per_class(target_cls, tp_vars)
         self.reg.nc = len(self.names)
         self.reg.update(results)
 
@@ -1442,12 +1447,12 @@ class RegressionSegmentMetrics(SegmentMetrics):
         self.reg = RegressionMetric()
         self.reg_fitness = reg_fitness
 
-    def process(self, tp, tp_m, conf, pred_cls, target_cls, tp_v):
+    def process(self, tp, tp_m, conf, pred_cls, target_cls, tp_vars):
         """Processes the detection, segmentation, and regression metrics over the given set of predictions."""
         super().process(tp, tp_m, conf, pred_cls, target_cls)
-        results_weight = error_per_class(target_cls, tp_v)
+        results = error_per_class(target_cls, tp_vars)
         self.reg.nc = len(self.names)
-        self.reg.update(results_weight)
+        self.reg.update(results)
 
     def mean_results(self):
         """Return the mean results of box, segment, and regression."""
