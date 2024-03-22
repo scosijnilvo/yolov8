@@ -161,7 +161,7 @@ class RegressionDetectionValidator(RegressionValidator, DetectionValidator):
 
     def get_desc(self):
         """Return a formatted description of evaluation metrics."""
-        return ("%22s" + "%11s" * 9) % (
+        return ("%22s" + "%11s" * 7) % (
             "Class",
             "Images",
             "Instances",
@@ -169,9 +169,7 @@ class RegressionDetectionValidator(RegressionValidator, DetectionValidator):
             "R",
             "mAP50",
             "mAP50-95)",
-            "Reg(MAE",
             "MAPE",
-            "RMSE)"
         )
 
     def plot_predictions(self, batch, preds, ni):
@@ -305,7 +303,7 @@ class RegressionSegmentationValidator(RegressionValidator, SegmentationValidator
 
     def get_desc(self):
         """Return a formatted description of evaluation metrics."""
-        return ("%22s" + "%11s" * 13) % (
+        return ("%22s" + "%11s" * 11) % (
             "Class",
             "Images",
             "Instances",
@@ -317,9 +315,7 @@ class RegressionSegmentationValidator(RegressionValidator, SegmentationValidator
             "R",
             "mAP50",
             "mAP50-95)",
-            "Reg(MAE",
             "MAPE",
-            "RMSE)"
         )
 
     def plot_predictions(self, batch, preds, ni):

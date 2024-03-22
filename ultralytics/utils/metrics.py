@@ -1346,42 +1346,47 @@ class RegressionMetric(SimpleClass):
 
     @property
     def mae(self):
-        """Mean of MAE for all classes."""
+        """Mean of the MAE of all classes for each variable."""
         if np.isnan(self.all_mae).all():
             return np.full(self.all_mae.shape[-1], np.nan)
         return np.nanmean(self.all_mae, axis=0)
 
     @property
     def mape(self):
-        """Mean of MAPE for all classes."""
+        """Mean of the MAPE of all classes for each variable."""
         if np.isnan(self.all_mape).all():
             return np.full(self.all_mape.shape[-1], np.nan)
         return np.nanmean(self.all_mape, axis=0)
 
     @property
     def rmse(self):
-        """Mean of RMSE for all classes."""
+        """Mean of the RMSE of all classes for each variable."""
         if np.isnan(self.all_rmse).all():
             return np.full(self.all_rmse.shape[-1], np.nan)
         return np.nanmean(self.all_rmse, axis=0)
-    
+
     @property
     def combined_mape(self):
-        """TODO"""
+        """Combined MAPE of all variables and all classes."""
+        if np.isnan(self.all_mape).all():
+            return np.nan
+        return np.nanmean(self.all_mape)
 
     def mean_results(self):
-        """Returns a list of all metrics."""
-        return [self.mae, self.mape, self.rmse]
+        """Returns a list of all metrics to print."""
+        return [self.combined_mape]
 
     def class_result(self, i):
-        """Returns mae, mape, and rmse for the class with index i."""
-        return self.all_mae[i], self.all_mape[i], self.all_rmse[i]
+        """Returns the MAPE for the class with index i."""
+        class_mape = self.all_mape[i]
+        result = np.nan if np.isnan(class_mape).all() else np.nanmean(class_mape)
+        return (result, )
 
     def fitness(self):
         """Fitness value used to determine best model for early stopping."""
-        if np.isnan(self.mape):
+        if np.isnan(self.combined_mape):
             return 0
-        return max(1 - self.mape, 0)
+        return max(0, 1 - self.combined_mape)
 
     def update(self, results):
         """
@@ -1430,9 +1435,7 @@ class RegressionDetMetrics(DetMetrics):
     def keys(self):
         """List of keys for all metrics."""
         keys = super().keys
-        keys.append("metrics/MAE")
         keys.append("metrics/MAPE")
-        keys.append("metrics/RMSE")
         return keys
 
 
@@ -1442,7 +1445,7 @@ class RegressionSegmentMetrics(SegmentMetrics):
     """
 
     def __init__(self, save_dir=Path("."), plot=False, on_plot=None, names=(), reg_fitness=False):
-        """Initialize a `WeightSegmentMetrics` instance with save directory, plot flag, callback function, class names, and reg_fitness flag."""
+        """Initialize a `RegressionSegmentMetrics` instance with save directory, plot flag, callback function, class names, and reg_fitness flag."""
         super().__init__(save_dir, plot, on_plot, names)
         self.reg = RegressionMetric()
         self.reg_fitness = reg_fitness
@@ -1476,7 +1479,5 @@ class RegressionSegmentMetrics(SegmentMetrics):
     def keys(self):
         """List of keys for all metrics."""
         keys = super().keys
-        keys.append("metrics/MAE")
         keys.append("metrics/MAPE")
-        keys.append("metrics/RMSE")
         return keys
