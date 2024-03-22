@@ -1,3 +1,4 @@
+from pathlib import Path
 from ultralytics.engine.model import Model
 from ultralytics.models import regression
 from ultralytics.nn.tasks import RegressionDetectionModel, RegressionSegmentationModel
@@ -9,12 +10,19 @@ class RegressionModel(Model):
     
     Args:
         model (str, Path): Path to the model file to load or create.
-        task (str): Task type for the model. Supported values: 'detect' and 'segment'.
+        task (str, optional): Task type for the model. Supported values: 'detect' and 'segment'.
         verbose (bool, optional): Whether to enable verbose mode. Defaults to False.
     """
 
-    def __init__(self, model, task, verbose=False):
-        """Initializes the model."""
+    def __init__(self, model, task=None, verbose=False):
+        """Try to guess task from config filename and initialize the model."""
+        assert task == None or task == "detect" or task == "segment", f"Task '{task}' not supported by model."
+        path = Path(model)
+        if not task and path.suffix == ".yaml":
+            if "-det" in path.stem:
+                task = "detect"
+            elif "-seg" in path.stem:
+                task = "segment"
         super().__init__(model, task=task, verbose=verbose)
 
     @property
