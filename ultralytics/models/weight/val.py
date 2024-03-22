@@ -62,7 +62,7 @@ class WeightDetectionValidator(WeightValidator, DetectionValidator):
     def __init__(self, dataloader=None, save_dir=None, pbar=None, args=None, _callbacks=None):
         """Initialize the validator with `WeightDetMetrics`."""
         super().__init__(dataloader, save_dir, pbar, args, _callbacks)
-        weight_fitness = args.weight_fitness if "weight_fitness" in args else False
+        weight_fitness = args.get("weight_fitness", False)
         self.metrics = WeightDetMetrics(save_dir=self.save_dir, on_plot=self.on_plot, weight_fitness=weight_fitness)
 
     def postprocess(self, preds):
@@ -190,7 +190,7 @@ class WeightSegmentationValidator(WeightValidator, SegmentationValidator):
     def __init__(self, dataloader=None, save_dir=None, pbar=None, args=None, _callbacks=None):
         """Initialize the validator with `WeightSegmentMetrics`."""
         super().__init__(dataloader, save_dir, pbar, args, _callbacks)
-        weight_fitness = args.weight_fitness if "weight_fitness" in args else False
+        weight_fitness = args.get("weight_fitness", False)
         self.metrics = WeightSegmentMetrics(save_dir=self.save_dir, on_plot=self.on_plot, weight_fitness=weight_fitness)
 
     def _prepare_pred(self, pred, pbatch, proto):
