@@ -81,7 +81,7 @@ class RegressionDetectionValidator(RegressionValidator, DetectionValidator):
     def __init__(self, dataloader=None, save_dir=None, pbar=None, args=None, _callbacks=None):
         """Initialize the validator with `RegressionDetMetrics`."""
         super().__init__(dataloader, save_dir, pbar, args, _callbacks)
-        reg_fitness = args.reg_fitness if "reg_fitness" in args else False
+        reg_fitness = args.get("reg_fitness", False)
         self.metrics = RegressionDetMetrics(save_dir=self.save_dir, on_plot=self.on_plot, reg_fitness=reg_fitness)
         self.num_vars = None # value set during postprocess
 
@@ -195,7 +195,7 @@ class RegressionSegmentationValidator(RegressionValidator, SegmentationValidator
     def __init__(self, dataloader=None, save_dir=None, pbar=None, args=None, _callbacks=None):
         """Initialize the validator with `RegressionSegmentMetrics`."""
         super().__init__(dataloader, save_dir, pbar, args, _callbacks)
-        reg_fitness = args.reg_fitness if "reg_fitness" in args else False
+        reg_fitness = args.get("reg_fitness", False)
         self.metrics = RegressionSegmentMetrics(save_dir=self.save_dir, on_plot=self.on_plot, reg_fitness=reg_fitness)
         self.num_vars = None # value set during postprocess
 
