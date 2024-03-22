@@ -1279,5 +1279,5 @@ class CustomFormat(Format):
         nl = len(labels["instances"])
         extra_vars = labels.pop("extra_vars")
         new_labels = super().__call__(labels)
-        new_labels["extra_vars"] = torch.from_numpy(extra_vars) if nl else torch.zeros(nl)
+        new_labels["extra_vars"] = torch.from_numpy(extra_vars)
         return new_labels

@@ -727,6 +727,7 @@ class RegressionLoss():
         beta = self.assigner.beta
         # create new task-aligned assigner that includes ground-truth values for extra variables
         self.assigner = CustomTaskAlignedAssigner(topk=topk, num_classes=self.nc, alpha=alpha, beta=beta)
+        self.num_vars = model.yaml["num_vars"]
 
     def preprocess(self, targets, batch_size, scale_tensor):
         """Preprocesses the target counts and matches with the input batch size to output a tensor."""
@@ -763,10 +764,9 @@ class RegressionDetectionLoss(RegressionLoss, v8DetectionLoss):
         dtype = pred_scores.dtype
         imgsz = torch.tensor(feats[0].shape[2:], device=self.device, dtype=dtype) * self.stride[0]
         anchor_points, stride_tensor = make_anchors(feats, self.stride, 0.5)
-        num_vars = batch['extra_vars'].shape[1]
         targets = torch.cat((batch["batch_idx"].view(-1, 1), batch["cls"].view(-1, 1), batch["bboxes"], batch["extra_vars"]), 1)
         targets = self.preprocess(targets.to(self.device), batch_size, scale_tensor=imgsz[[1, 0, 1, 0]])
-        gt_labels, gt_bboxes, gt_vars = targets.split((1, 4, num_vars), 2)  # cls, xyxy, extra_vars
+        gt_labels, gt_bboxes, gt_vars = targets.split((1, 4, self.num_vars), 2)  # cls, xyxy, extra_vars
         mask_gt = gt_bboxes.sum(2, keepdim=True).gt_(0)
         pred_bboxes = self.bbox_decode(anchor_points, pred_distri)  # xyxy, (b, h*w, 4)
         _, target_bboxes, target_scores, target_vars, fg_mask, _ = self.assigner(
@@ -821,10 +821,9 @@ class RegressionSegmentationLoss(RegressionLoss, v8SegmentationLoss):
         imgsz = torch.tensor(feats[0].shape[2:], device=self.device, dtype=dtype) * self.stride[0]
         anchor_points, stride_tensor = make_anchors(feats, self.stride, 0.5)
         batch_idx = batch["batch_idx"].view(-1, 1)
-        num_vars = batch['extra_vars'].shape[1]
         targets = torch.cat((batch_idx, batch["cls"].view(-1, 1), batch["bboxes"], batch["extra_vars"]), 1)
         targets = self.preprocess(targets.to(self.device), batch_size, scale_tensor=imgsz[[1, 0, 1, 0]])
-        gt_labels, gt_bboxes, gt_vars = targets.split((1, 4, num_vars), 2)  # cls, xyxy, extra_vars
+        gt_labels, gt_bboxes, gt_vars = targets.split((1, 4, self.num_vars), 2)  # cls, xyxy, extra_vars
         mask_gt = gt_bboxes.sum(2, keepdim=True).gt_(0)
         pred_bboxes = self.bbox_decode(anchor_points, pred_distri)  # xyxy, (b, h*w, 4)
         _, target_bboxes, target_scores, target_vars, fg_mask, target_gt_idx = self.assigner(
