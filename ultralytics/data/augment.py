@@ -302,17 +302,17 @@ class Mosaic(BaseMixTransform):
         """Return labels with mosaic border instances clipped."""
         if len(mosaic_labels) == 0:
             return {}
-        incl_weights = "weights" in mosaic_labels[0]
-        if incl_weights:
-            weights = []
+        incl_extra_vars = "extra_vars" in mosaic_labels[0]
+        if incl_extra_vars:
+            extra_vars = []
         cls = []
         instances = []
         imgsz = self.imgsz * 2  # mosaic imgsz
         for labels in mosaic_labels:
             cls.append(labels["cls"])
             instances.append(labels["instances"])
-            if incl_weights:
-                weights.append(labels["weights"])
+            if incl_extra_vars:
+                extra_vars.append(labels["extra_vars"])
         # Final labels
         final_labels = {
             "im_file": mosaic_labels[0]["im_file"],
@@ -325,9 +325,9 @@ class Mosaic(BaseMixTransform):
         final_labels["instances"].clip(imgsz, imgsz)
         good = final_labels["instances"].remove_zero_area_boxes()
         final_labels["cls"] = final_labels["cls"][good]
-        if incl_weights:
-            final_labels["weights"] = np.concatenate(weights, 0)
-            final_labels["weights"] = final_labels["weights"][good]
+        if incl_extra_vars:
+            final_labels["extra_vars"] = np.concatenate(extra_vars, 0)
+            final_labels["extra_vars"] = final_labels["extra_vars"][good]
         return final_labels
 
 
@@ -349,8 +349,8 @@ class MixUp(BaseMixTransform):
         labels["img"] = (labels["img"] * r + labels2["img"] * (1 - r)).astype(np.uint8)
         labels["instances"] = Instances.concatenate([labels["instances"], labels2["instances"]], axis=0)
         labels["cls"] = np.concatenate([labels["cls"], labels2["cls"]], 0)
-        if "weights" in labels:
-            labels["weights"] = np.concatenate([labels["weights"], labels2["weights"]], 0)
+        if "extra_vars" in labels:
+            labels["extra_vars"] = np.concatenate([labels["extra_vars"], labels2["extra_vars"]], 0)
         return labels
 
 
@@ -567,8 +567,8 @@ class RandomPerspective:
         labels["cls"] = cls[i]
         labels["img"] = img
         labels["resized_shape"] = img.shape[:2]
-        if "weights" in labels:
-            labels["weights"] = labels["weights"][i]
+        if "extra_vars" in labels:
+            labels["extra_vars"] = labels["extra_vars"][i]
         return labels
 
     def box_candidates(self, box1, box2, wh_thr=2, ar_thr=100, area_thr=0.1, eps=1e-16):
@@ -795,9 +795,9 @@ class CopyPaste:
             1. Instances are expected to have 'segments' as one of their attributes for this augmentation to work.
             2. This method modifies the input dictionary 'labels' in place.
         """
-        incl_weights = "weights" in labels
-        if incl_weights:
-            weights = labels["weights"]
+        incl_extra_vars = "extra_vars" in labels
+        if incl_extra_vars:
+            extra_vars = labels["extra_vars"]
         im = labels["img"]
         cls = labels["cls"]
         h, w = im.shape[:2]
@@ -820,8 +820,8 @@ class CopyPaste:
                 cls = np.concatenate((cls, cls[[j]]), axis=0)
                 instances = Instances.concatenate((instances, ins_flip[[j]]), axis=0)
                 cv2.drawContours(im_new, instances.segments[[j]].astype(np.int32), -1, (1, 1, 1), cv2.FILLED)
-                if incl_weights:
-                    weights = np.concatenate((weights, weights[[j]]), axis=0)
+                if incl_extra_vars:
+                    extra_vars = np.concatenate((extra_vars, extra_vars[[j]]), axis=0)
 
             result = cv2.flip(im, 1)  # augment segments (flip left-right)
             i = cv2.flip(im_new, 1).astype(bool)
@@ -830,8 +830,8 @@ class CopyPaste:
         labels["img"] = im
         labels["cls"] = cls
         labels["instances"] = instances
-        if incl_weights:
-            labels["weights"] = weights
+        if incl_extra_vars:
+            labels["extra_vars"] = extra_vars
         return labels
 
 
@@ -1269,15 +1269,31 @@ class ToTensor:
         return im
 
 
-class WeightFormat(Format):
+class CustomFormat(Format):
     """
-    Extends class `Format` with weights.
+    Extends class `Format` with additional variables.
     """
+
+    def __init__(
+        self,
+        num_vars,
+        bbox_format="xywh",
+        normalize=True,
+        return_mask=False,
+        return_keypoint=False,
+        return_obb=False,
+        mask_ratio=4,
+        mask_overlap=True,
+        batch_idx=True
+    ):
+        """Set num_vars and initialize the class."""
+        super().__init__(bbox_format, normalize, return_mask, return_keypoint, return_obb, mask_ratio, mask_overlap, batch_idx)
+        self.num_vars = num_vars
 
     def __call__(self, labels):
         """Return formatted labels to be used by `collate_fn`."""
         nl = len(labels["instances"])
-        weights = labels.pop("weights")
+        extra_vars = labels.pop("extra_vars")
         new_labels = super().__call__(labels)
-        new_labels["weights"] = torch.from_numpy(weights) if nl else torch.zeros(nl)
+        new_labels["extra_vars"] = torch.from_numpy(extra_vars) if nl else torch.zeros((nl, self.num_vars))
         return new_labels

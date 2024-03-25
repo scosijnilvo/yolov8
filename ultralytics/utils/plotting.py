@@ -714,7 +714,7 @@ def plot_images(
     max_subplots=16,
     save=True,
     conf_thres=0.25,
-    weights=np.zeros(0, dtype=np.float32)
+    extra_vars=np.zeros(0, dtype=np.float32),
 ):
     """Plot image grid with labels."""
     if isinstance(images, torch.Tensor):
@@ -729,8 +729,8 @@ def plot_images(
         kpts = kpts.cpu().numpy()
     if isinstance(batch_idx, torch.Tensor):
         batch_idx = batch_idx.cpu().numpy()
-    if isinstance(weights, torch.Tensor):
-        weights = weights.cpu().numpy()
+    if isinstance(extra_vars, torch.Tensor):
+        extra_vars = extra_vars.cpu().numpy()
 
     max_size = 1920  # max image size
     bs, _, h, w = images.shape  # batch size, _, height, width
@@ -778,15 +778,21 @@ def plot_images(
                         boxes[..., :4] *= scale
                 boxes[..., 0::2] += x
                 boxes[..., 1::2] += y
-                wgts = weights[idx] if len(weights) else None
+                v = extra_vars[idx] if len(extra_vars) else None
                 for j, box in enumerate(boxes.astype(np.int64).tolist()):
                     c = classes[j]
                     color = colors(c)
                     c = names.get(c, c) if names else c
                     if labels or conf[j] > conf_thres:
-                        label = f"{c}" if labels else f"{c} {conf[j]:.1f}"
-                        if wgts is not None:
-                            label = f"{c} {wgts[j]:.2f}" if labels else f"{c} {conf[j]:.1f} {wgts[j]:.2f}"
+                        if v is not None:
+                            v_txt = ""
+                            for i in range(min(len(v[j]), 5)): # limit label text to max 5 vars
+                                v_txt += str(round(v[j][i], 2)) + " "
+                            if len(v[j]) > 5:
+                                v_txt += "..."
+                            label = f"{c} [{v_txt.rstrip()}]" if labels else f"{c} {conf[j]:.1f} [{v_txt.rstrip()}]"
+                        else:
+                            label = f"{c}" if labels else f"{c} {conf[j]:.1f}"
                         annotator.box_label(box, label, color=color, rotated=is_obb)
 
             elif len(classes):
@@ -845,7 +851,7 @@ def plot_images(
 
 
 @plt_settings()
-def plot_results(file="path/to/results.csv", dir="", segment=False, pose=False, classify=False, weight=False, on_plot=None):
+def plot_results(file="path/to/results.csv", dir="", segment=False, pose=False, classify=False, regression=False, on_plot=None):
     """
     Plot training results from a results CSV file. The function supports various types of data including segmentation,
     pose estimation, and classification. Plots are saved as 'results.png' in the directory where the CSV is located.
@@ -856,7 +862,7 @@ def plot_results(file="path/to/results.csv", dir="", segment=False, pose=False, 
         segment (bool, optional): Flag to indicate if the data is for segmentation. Defaults to False.
         pose (bool, optional): Flag to indicate if the data is for pose estimation. Defaults to False.
         classify (bool, optional): Flag to indicate if the data is for classification. Defaults to False.
-        weights (bool, optional): Flag to indicate if the data includes weights. Defaults to False.
+        regression (bool, optional): Flag to indicate if the data is for regression. Defaults to False.
         on_plot (callable, optional): Callback function to be executed after plotting. Takes filename as an argument.
             Defaults to None.
 
@@ -871,13 +877,17 @@ def plot_results(file="path/to/results.csv", dir="", segment=False, pose=False, 
     from scipy.ndimage import gaussian_filter1d
 
     save_dir = Path(file).parent if file else Path(dir)
-    if weight:
+    if regression:
         if segment:
-            fig, ax = plt.subplots(3, 7, figsize=(15, 9), tight_layout=True)
-            index = list(range(1, 22))
+            fig, ax = plt.subplots(4, 5, figsize=(15, 12), tight_layout=True)
+            index = [1, 2, 3, 4, 5, 15, 16, 17, 18, 19, 6, 7, 8, 9, 14, 10, 11, 12, 13]
+            ax[3, 4].axis('off')
         else:
-            fig, ax = plt.subplots(3, 5, figsize=(12, 9), tight_layout=True)
-            index = list(range(1, 16))
+            fig, ax = plt.subplots(4, 4, figsize=(12, 12), tight_layout=True)
+            index = [1, 2, 3, 4, 10, 11, 12, 13, 5, 6, 7, 8, 9]
+            ax[3, 1].axis('off')
+            ax[3, 2].axis('off')
+            ax[3, 3].axis('off')
     else:
         if classify:
             fig, ax = plt.subplots(2, 2, figsize=(6, 6), tight_layout=True)

@@ -482,41 +482,43 @@ class RTDETRDecoder(nn.Module):
             xavier_uniform_(layer[0].weight)
 
 
-class WeightDetect(Detect):
-    """Extends the `Detect` head with an additional layer for predicting the weight of objects."""
+class DetectRegressor(Detect):
+    """Extends the `Detect` head with an additional layer for predicting the values of extra variables."""
 
-    def __init__(self, nc=80, ch=()):
+    def __init__(self, nc=80, ch=(), num_vars=1):
         """Initializes the detection layer with specified number of classes and channels."""
         super().__init__(nc, ch)
         self.detect = Detect.forward
-        c4 = ch[0] // 4
-        self.cv4 = nn.ModuleList(nn.Sequential(Conv(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, 1, 1)) for x in ch)
+        self.num_vars = num_vars
+        c4 = max(ch[0] // 4, self.num_vars)
+        self.cv4 = nn.ModuleList(nn.Sequential(Conv(x, c4, 3), Conv(c4, c4, 3), nn.Conv2d(c4, self.num_vars, 1)) for x in ch)
 
     def forward(self, x):
-        """Concatenates and returns the predicted weights with results of the detection layer."""
+        """Concatenates and returns the predicted variables with results of the detection layer."""
         bs = x[0].shape[0]
-        w = torch.cat([self.cv4[i](x[i]).view(bs, 1, -1) for i in range(self.nl)], 2)
+        v = torch.cat([self.cv4[i](x[i]).view(bs, self.num_vars, -1) for i in range(self.nl)], 2)
         x = self.detect(self, x)
         if self.training:
-            return x, w
-        return torch.cat([x, w], 1) if self.export else (torch.cat([x[0], w], 1), (x[1], w))
+            return x, v
+        return torch.cat([x, v], 1) if self.export else (torch.cat([x[0], v], 1), (x[1], v))
 
 
-class WeightSegment(Segment):
-    """Extends the `Segment` head with an additional layer for predicting the weight of objects."""
+class SegmentRegressor(Segment):
+    """Extends the `Segment` head with an additional layer for predicting the values of extra variables."""
 
-    def __init__(self, nc=80, nm=32, npr=256, ch=()):
+    def __init__(self, nc=80, nm=32, npr=256, ch=(), num_vars=1):
         """Initializes the segmentation layer with specified number of classes, masks, prototypes, and channels."""
         super().__init__(nc, nm, npr, ch)
         self.segment = Segment.forward
-        c5 = ch[0] // 4
-        self.cv5 = nn.ModuleList(nn.Sequential(Conv(x, c5, 3), Conv(c5, c5, 3), nn.Conv2d(c5, 1, 1)) for x in ch)
+        self.num_vars = num_vars
+        c5 = max(ch[0] // 4, self.num_vars)
+        self.cv5 = nn.ModuleList(nn.Sequential(Conv(x, c5, 3), Conv(c5, c5, 3), nn.Conv2d(c5, self.num_vars, 1)) for x in ch)
 
     def forward(self, x):
-        """Concatenates and returns the predicted weights with results of the segmentation layer."""
+        """Concatenates and returns the predicted variables with results of the segmentation layer."""
         bs = x[0].shape[0]
-        w = torch.cat([self.cv5[i](x[i]).view(bs, 1, -1) for i in range(self.nl)], 2)
+        v = torch.cat([self.cv5[i](x[i]).view(bs, self.num_vars, -1) for i in range(self.nl)], 2)
         x = self.segment(self, x)
         if self.training:
-            return *x, w
-        return (torch.cat([x[0], w], 1), x[1]) if self.export else (torch.cat([x[0], w], 1), (*x[1], w))
+            return *x, v
+        return (torch.cat([x[0], v], 1), x[1]) if self.export else (torch.cat([x[0], v], 1), (*x[1], v))

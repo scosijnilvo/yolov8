@@ -417,26 +417,27 @@ class Results(SimpleClass):
         return json.dumps(results, indent=2)
 
 
-class WeightResults(Results):
+class RegressionResults(Results):
     """
-    Extends `Results` with an additional attribute `weights` containing the predicted weight for each detected object. 
+    Extends `Results` with an additional attribute `extra_vars`
+    containing predicted values of extra variables for each detected object.
     """
 
-    def __init__(self, orig_img, path, names, boxes=None, masks=None, probs=None, keypoints=None, obb=None, weights=None):
-        """Initialize the WeightResults class."""
+    def __init__(self, orig_img, path, names, boxes=None, masks=None, probs=None, keypoints=None, obb=None, extra_vars=None):
+        """Initialize the RegressionResults class."""
         super().__init__(orig_img, path, names, boxes, masks, probs, keypoints, obb)
-        self.weights = weights
-        self._keys = "boxes", "masks", "probs", "keypoints", "obb", "weights"
+        self.extra_vars = extra_vars
+        self._keys = "boxes", "masks", "probs", "keypoints", "obb", "extra_vars"
 
-    def update(self, boxes=None, masks=None, probs=None, weights=None):
-        """Update the boxes, masks, probs, and weights of the WeightResults object."""
+    def update(self, boxes=None, masks=None, probs=None, extra_vars=None):
+        """Update the boxes, masks, probs, and extra_vars of the RegressionResults object."""
         super().update(boxes, masks, probs) 
-        if weights is not None:
-            self.weights = weights
+        if extra_vars is not None:
+            self.extra_vars = extra_vars
 
     def new(self):
-        """Return a new WeightResults object with the same image, path, and names."""
-        return WeightResults(orig_img=self.orig_img, path=self.path, names=self.names)
+        """Return a new RegressionResults object with the same image, path, and names."""
+        return RegressionResults(orig_img=self.orig_img, path=self.path, names=self.names)
 
 
 class Boxes(BaseTensor):

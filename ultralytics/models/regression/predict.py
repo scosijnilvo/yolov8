@@ -1,18 +1,19 @@
 from ultralytics.models.yolo.detect.predict import DetectionPredictor
 from ultralytics.models.yolo.segment.predict import SegmentationPredictor
-from ultralytics.engine.results import WeightResults
+from ultralytics.engine.results import RegressionResults
 from ultralytics.utils import ops
 
 
-class WeightDetectionPredictor(DetectionPredictor):
+class RegressionDetectionPredictor(DetectionPredictor):
     """
-    Extends `DetectionPredictor` with weight of objects.
+    Extends `DetectionPredictor` with regression for extra variables.
     """
 
     def postprocess(self, preds, img, orig_imgs):
-        """Post-processes predictions and returns a list of WeightResults objects."""
+        """Post-processes predictions and returns a list of RegressionResults objects."""
+        num_vars = preds[1][1].shape[1]
         p = ops.non_max_suppression(
-            preds,
+            preds[0],
             self.args.conf,
             self.args.iou,
             agnostic=self.args.agnostic_nms,
@@ -26,29 +27,30 @@ class WeightDetectionPredictor(DetectionPredictor):
             orig_img = orig_imgs[i]
             img_path = self.batch[0][i]
             if not len(pred):
-                weights = None
+                extra_vars = None
             else:
                 pred[:, :4] = ops.scale_boxes(img.shape[2:], pred[:, :4], orig_img.shape)
-                weights = pred[:, -1]
+                extra_vars = pred[:, -num_vars:]
             results.append(
-                WeightResults(
+                RegressionResults(
                     orig_img,
                     path=img_path,
                     names=self.model.names,
                     boxes=pred[:, :6],
-                    weights=weights
+                    extra_vars=extra_vars
                 )
             )
         return results
 
 
-class WeightSegmentationPredictor(SegmentationPredictor):
+class RegressionSegmentationPredictor(SegmentationPredictor):
     """
-    Extends `SegmentationPredictor` with weight of objects.
+    Extends `SegmentationPredictor` with regression for extra variables.
     """
     
     def postprocess(self, preds, img, orig_imgs):
         """Applies non-max suppression and processes detections for each image in an input batch."""
+        num_vars = preds[1][3].shape[1]
         p = ops.non_max_suppression(
             preds[0],
             self.args.conf,
@@ -67,23 +69,23 @@ class WeightSegmentationPredictor(SegmentationPredictor):
             img_path = self.batch[0][i]
             if not len(pred):  # save empty boxes
                 masks = None
-                weights = None
+                extra_vars = None
             else:
                 if self.args.retina_masks:
                     pred[:, :4] = ops.scale_boxes(img.shape[2:], pred[:, :4], orig_img.shape)
-                    masks = ops.process_mask_native(proto[i], pred[:, 6:-1], pred[:, :4], orig_img.shape[:2])  # HWC
+                    masks = ops.process_mask_native(proto[i], pred[:, 6:-num_vars], pred[:, :4], orig_img.shape[:2])  # HWC
                 else:
-                    masks = ops.process_mask(proto[i], pred[:, 6:-1], pred[:, :4], img.shape[2:], upsample=True)  # HWC
+                    masks = ops.process_mask(proto[i], pred[:, 6:-num_vars], pred[:, :4], img.shape[2:], upsample=True)  # HWC
                     pred[:, :4] = ops.scale_boxes(img.shape[2:], pred[:, :4], orig_img.shape)
-                weights = pred[:, -1]
+                extra_vars = pred[:, -num_vars:]
             results.append(
-                WeightResults(
+                RegressionResults(
                     orig_img,
                     path=img_path,
                     names=self.model.names,
                     boxes=pred[:, :6],
                     masks=masks,
-                    weights=weights
+                    extra_vars=extra_vars
                 )
             )
         return results

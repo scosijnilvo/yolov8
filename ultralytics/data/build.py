@@ -23,7 +23,7 @@ from ultralytics.data.utils import IMG_FORMATS, VID_FORMATS
 from ultralytics.utils import RANK, colorstr
 from ultralytics.utils.checks import check_file
 from .dataset import YOLODataset
-from .dataset import WeightDataset
+from .dataset import CustomDataset
 from .utils import PIN_MEMORY
 
 
@@ -207,6 +207,6 @@ def _build_custom_dataset(cls, cfg, img_path, batch, data, mode="train", rect=Fa
     )
 
 
-def build_weight_dataset(cfg, img_path, batch, data, mode="train", rect=False, stride=32):
-    """Build a `WeightDataset`."""
-    return _build_custom_dataset(WeightDataset, cfg, img_path, batch, data, mode, rect, stride)
+def build_custom_dataset(cfg, img_path, batch, data, mode="train", rect=False, stride=32):
+    """Build a `CustomDataset`."""
+    return _build_custom_dataset(CustomDataset, cfg, img_path, batch, data, mode, rect, stride)

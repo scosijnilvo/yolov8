@@ -49,13 +49,13 @@ from ultralytics.nn.modules import (
     CBFuse,
     CBLinear,
     Silence,
-    WeightDetect,
-    WeightSegment,
+    DetectRegressor,
+    SegmentRegressor,
 )
 from ultralytics.utils import DEFAULT_CFG_DICT, DEFAULT_CFG_KEYS, LOGGER, colorstr, emojis, yaml_load
 from ultralytics.utils.checks import check_requirements, check_suffix, check_yaml
 from ultralytics.utils.loss import v8ClassificationLoss, v8DetectionLoss, v8OBBLoss, v8PoseLoss, v8SegmentationLoss
-from ultralytics.utils.loss import WeightDetectionLoss, WeightSegmentationLoss
+from ultralytics.utils.loss import RegressionDetectionLoss, RegressionSegmentationLoss
 from ultralytics.utils.plotting import feature_visualization
 from ultralytics.utils.torch_utils import (
     fuse_conv_and_bn,
@@ -296,7 +296,7 @@ class DetectionModel(BaseModel):
         if isinstance(m, Detect):  # includes all Detect subclasses like Segment, Pose, OBB, WorldDetect
             s = 256  # 2x min stride
             m.inplace = self.inplace
-            forward = lambda x: self.forward(x)[0] if isinstance(m, (Segment, Pose, OBB, WeightDetect, WeightSegment)) else self.forward(x)
+            forward = lambda x: self.forward(x)[0] if isinstance(m, (Segment, Pose, OBB, DetectRegressor, SegmentRegressor)) else self.forward(x)
             m.stride = torch.tensor([s / x.shape[-2] for x in forward(torch.zeros(1, ch, s, s))])  # forward
             self.stride = m.stride
             m.bias_init()  # only run once
@@ -374,27 +374,33 @@ class SegmentationModel(DetectionModel):
         return v8SegmentationLoss(self)
 
 
-class WeightDetectionModel(DetectionModel):
-    """Model for detection and prediction of object weight"""
-    def __init__(self, cfg="yolov8n-weight.yaml", ch=3, nc=None, verbose=True):
-        """Initialize the WeightDetectionModel with given config and parameters."""
+class RegressionDetectionModel(DetectionModel):
+    """Model for detection and prediction of extra variables"""
+    def __init__(self, cfg="yolov8n-det-regression.yaml", ch=3, nc=None, num_vars=1, verbose=True):
+        """Initialize the RegressionDetectionModel with given config and parameters."""
+        if not isinstance(cfg, dict):
+            cfg = yaml_model_load(cfg)
+        cfg["num_vars"] = num_vars
         super().__init__(cfg=cfg, ch=ch, nc=nc, verbose=verbose)
 
     def init_criterion(self):
-        """Initialize the loss criterion for the WeightDetectionModel."""
-        return WeightDetectionLoss(self)
+        """Initialize the loss criterion for the RegressionDetectionModel."""
+        return RegressionDetectionLoss(self)
 
 
-class WeightSegmentationModel(SegmentationModel):
-    """Model for segmentation and prediction of object weight"""
+class RegressionSegmentationModel(SegmentationModel):
+    """Model for segmentation and prediction of extra variables"""
 
-    def __init__(self, cfg="yolov8n-weight-seg.yaml", ch=3, nc=None, verbose=True):
-        """Initialize the WeightSegmentationModel with given config and parameters."""
+    def __init__(self, cfg="yolov8n-seg-regression.yaml", ch=3, nc=None, num_vars=1, verbose=True):
+        """Initialize the RegressionSegmentationModel with given config and parameters."""
+        if not isinstance(cfg, dict):
+            cfg = yaml_model_load(cfg)
+        cfg["num_vars"] = num_vars
         super().__init__(cfg=cfg, ch=ch, nc=nc, verbose=verbose)
 
     def init_criterion(self):
-        """Initialize the loss criterion for the WeightSegmentationModel."""
-        return WeightSegmentationLoss(self)
+        """Initialize the loss criterion for the RegressionSegmentationModel."""
+        return RegressionSegmentationLoss(self)
 
 
 class PoseModel(DetectionModel):
@@ -921,10 +927,12 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             args = [ch[f]]
         elif m is Concat:
             c2 = sum(ch[x] for x in f)
-        elif m in (Detect, WorldDetect, Segment, Pose, OBB, ImagePoolingAttn, WeightDetect, WeightSegment):
+        elif m in (Detect, WorldDetect, Segment, Pose, OBB, ImagePoolingAttn, DetectRegressor, SegmentRegressor):
             args.append([ch[x] for x in f])
-            if m is Segment or m is WeightSegment:
+            if m is Segment or m is SegmentRegressor:
                 args[2] = make_divisible(min(args[2], max_channels) * width, 8)
+            if m is DetectRegressor or m is SegmentRegressor:
+                args.append(d.get("num_vars"))
         elif m is RTDETRDecoder:  # special case, channels arg must be passed in index 1
             args.insert(1, [ch[x] for x in f])
         elif m is CBLinear:
