@@ -1274,10 +1274,26 @@ class CustomFormat(Format):
     Extends class `Format` with additional variables.
     """
 
+    def __init__(
+        self,
+        num_vars,
+        bbox_format="xywh",
+        normalize=True,
+        return_mask=False,
+        return_keypoint=False,
+        return_obb=False,
+        mask_ratio=4,
+        mask_overlap=True,
+        batch_idx=True
+    ):
+        """Set num_vars and initialize the class."""
+        super().__init__(bbox_format, normalize, return_mask, return_keypoint, return_obb, mask_ratio, mask_overlap, batch_idx)
+        self.num_vars = num_vars
+
     def __call__(self, labels):
         """Return formatted labels to be used by `collate_fn`."""
         nl = len(labels["instances"])
         extra_vars = labels.pop("extra_vars")
         new_labels = super().__call__(labels)
-        new_labels["extra_vars"] = torch.from_numpy(extra_vars)
+        new_labels["extra_vars"] = torch.from_numpy(extra_vars) if nl else torch.zeros((nl, self.num_vars))
         return new_labels

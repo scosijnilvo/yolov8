@@ -493,6 +493,7 @@ class CustomDataset(YOLODataset):
             transforms = Compose([LetterBox(new_shape=(self.imgsz, self.imgsz), scaleup=False)])
         transforms.append(
             CustomFormat(
+                self.num_vars,
                 bbox_format="xywh",
                 normalize=True,
                 return_mask=self.use_segments,
