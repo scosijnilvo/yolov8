@@ -879,11 +879,11 @@ def plot_results(file="path/to/results.csv", dir="", segment=False, pose=False, 
     save_dir = Path(file).parent if file else Path(dir)
     if regression:
         if segment:
-            fig, ax = plt.subplots(4, 5, figsize=(15, 9), tight_layout=True)
+            fig, ax = plt.subplots(4, 5, figsize=(15, 12), tight_layout=True)
             index = [1, 2, 3, 4, 5, 15, 16, 17, 18, 19, 6, 7, 8, 9, 14, 10, 11, 12, 13]
             ax[3, 4].axis('off')
         else:
-            fig, ax = plt.subplots(4, 4, figsize=(12, 9), tight_layout=True)
+            fig, ax = plt.subplots(4, 4, figsize=(12, 12), tight_layout=True)
             index = [1, 2, 3, 4, 10, 11, 12, 13, 5, 6, 7, 8, 9]
             ax[3, 1].axis('off')
             ax[3, 2].axis('off')
