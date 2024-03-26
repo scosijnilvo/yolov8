@@ -21,7 +21,7 @@ pip install -e .
 ```
 
 ## Dataset
-Create ```dataset.yaml``` (edit paths and classes to fit your dataset)
+Create ```dataset.yaml``` (edit paths, classes, and num_vars to fit your dataset)
 ```yaml
 path: ../yolov8/ # root dir
 train: dataset/images/train # train images
@@ -33,6 +33,9 @@ names:
   0: class_0
   1: class_1
   # ...
+
+# Number of variables to predict
+num_vars: 1
 ```
 
 Each image must have a corresponding label file with the same name and ```.txt``` extension located at ```dataset/labels/[train|val|test]```.
@@ -40,34 +43,34 @@ The label files consist of one row for each object in the image with the followi
 
 For detection:
 ```
-<class-index> <weight> <x> <y> <w> <h>
+<class-index> <var_1> ... <var_n> <x> <y> <w> <h>
 ```
 
 For segmentation:
 ```
-<class-index> <weight> <x1> <y1> ... <xn> <yn>
+<class-index> <var_1> ... <var_n> <x1> <y1> ... <xn> <yn>
 ```
 
 where
 - ```<class-index>``` = index of the class declared in the ```.yaml``` file
-- ```<weight>``` = weight of the object
+- ```<var_1> ... <var_n>``` = ground-truth values of the variables, set ```num_vars``` in the ```.yaml``` file to ```n```
 - ```<x> <y> <w> <h>``` = bounding box coordinates in xywh-format, normalized between 0 and 1
 - ```<x1> <y1> ... <xn> <yn>``` = bounding coordinates of the segmentation mask, normalized between 0 and 1
 
 ## Example code
 ```python
 # import
-from ultralytics.models import WeightModel
+from ultralytics.models import RegressionModel
 
 # training a detection model
-model = WeightModel('yolov8n-weight.yaml', task='detect')
+model = RegressionModel('yolov8s-det-regression.yaml')
 results = model.train(data='dataset.yaml', epochs=100)
 
 # training a segmentation model
-model = WeightModel('yolov8n-weight-seg.yaml', task='segment')
+model = RegressionModel('yolov8s-seg-regression.yaml')
 results = model.train(data='dataset.yaml', epochs=100)
 
 # loading + evaluating on test set
-model = WeightModel('saved_model.pt', task='segment')
+model = RegressionModel('saved_model.pt')
 metrics = model.val(split='test')
 ```
