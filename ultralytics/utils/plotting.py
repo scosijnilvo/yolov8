@@ -786,8 +786,8 @@ def plot_images(
                     if labels or conf[j] > conf_thres:
                         if v is not None:
                             v_txt = ""
-                            for i in range(min(len(v[j]), 5)): # limit label text to max 5 vars
-                                v_txt += str(round(v[j][i], 2)) + " "
+                            for v_idx in range(min(len(v[j]), 5)): # limit label text to max 5 vars
+                                v_txt += str(round(v[j][v_idx], 2)) + " "
                             if len(v[j]) > 5:
                                 v_txt += "..."
                             label = f"{c} [{v_txt.rstrip()}]" if labels else f"{c} {conf[j]:.1f} [{v_txt.rstrip()}]"
