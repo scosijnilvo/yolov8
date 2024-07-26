@@ -94,7 +94,7 @@ class Results(SimpleClass):
         tojson(normalize=False): Converts detection results to JSON format.
     """
 
-    def __init__(self, orig_img, path, names, boxes=None, masks=None, probs=None, keypoints=None, obb=None) -> None:
+    def __init__(self, orig_img, path, names, boxes=None, masks=None, probs=None, keypoints=None, obb=None, extra_vars=None) -> None:
         """
         Initialize the Results class.
 
@@ -119,7 +119,8 @@ class Results(SimpleClass):
         self.names = names
         self.path = path
         self.save_dir = None
-        self._keys = "boxes", "masks", "probs", "keypoints", "obb"
+        self._keys = "boxes", "masks", "probs", "keypoints", "obb", "extra_vars"
+        self.extra_vars = extra_vars
 
     def __getitem__(self, idx):
         """Return a Results object for the specified index."""
@@ -132,7 +133,7 @@ class Results(SimpleClass):
             if v is not None:
                 return len(v)
 
-    def update(self, boxes=None, masks=None, probs=None, obb=None):
+    def update(self, boxes=None, masks=None, probs=None, obb=None, extra_vars=None):
         """Update the boxes, masks, and probs attributes of the Results object."""
         if boxes is not None:
             self.boxes = Boxes(ops.clip_boxes(boxes, self.orig_shape), self.orig_shape)
@@ -142,6 +143,8 @@ class Results(SimpleClass):
             self.probs = probs
         if obb is not None:
             self.obb = OBB(obb, self.orig_shape)
+        if extra_vars is not None:
+            self.extra_vars = extra_vars
 
     def _apply(self, fn, *args, **kwargs):
         """
@@ -201,6 +204,7 @@ class Results(SimpleClass):
         show=False,
         save=False,
         filename=None,
+        extra_vars=True,
     ):
         """
         Plots the detection results on an input RGB image. Accepts a numpy array (cv2) or a PIL Image.
@@ -222,6 +226,7 @@ class Results(SimpleClass):
             show (bool): Whether to display the annotated image directly.
             save (bool): Whether to save the annotated image to `filename`.
             filename (str): Filename to save image to if save is True.
+            extra_vars (bool): Include extra vars in bounding box label.
 
         Returns:
             (numpy.ndarray): A numpy array of the annotated image.
@@ -248,6 +253,7 @@ class Results(SimpleClass):
         pred_boxes, show_boxes = self.obb if is_obb else self.boxes, boxes
         pred_masks, show_masks = self.masks, masks
         pred_probs, show_probs = self.probs, probs
+        pred_vars, show_vars = self.extra_vars, extra_vars
         annotator = Annotator(
             deepcopy(self.orig_img if img is None else img),
             line_width,
@@ -273,10 +279,21 @@ class Results(SimpleClass):
 
         # Plot Detect results
         if pred_boxes is not None and show_boxes:
-            for d in reversed(pred_boxes):
+            for i, d in enumerate(reversed(pred_boxes)):
                 c, conf, id = int(d.cls), float(d.conf) if conf else None, None if d.id is None else int(d.id.item())
                 name = ("" if id is None else f"id:{id} ") + names[c]
-                label = (f"{name} {conf:.2f}" if conf else name) if labels else None
+                label = None
+                if labels:
+                    if pred_vars is not None and show_vars:
+                        v = pred_vars[len(pred_vars) - 1 - i]
+                        v_txt = ""
+                        for v_idx in range(min(len(v), 5)):
+                            v_txt += str(round(float(v[v_idx]), 2)) + " "
+                        if len(v) > 5:
+                            v_txt += "..."
+                        label = (f"{name} {conf:.2f} {v_txt.rstrip()}" if conf else f"{name} {v_txt.rstrip()}")
+                    else:
+                        label = (f"{name} {conf:.2f}" if conf else name)
                 box = d.xyxyxyxy.reshape(-1, 4, 2).squeeze() if is_obb else d.xyxy.squeeze()
                 annotator.box_label(box, label, color=colors(c, True), rotated=is_obb)
 
@@ -340,6 +357,7 @@ class Results(SimpleClass):
         masks = self.masks
         probs = self.probs
         kpts = self.keypoints
+        extra_vars = self.extra_vars
         texts = []
         if probs is not None:
             # Classify
@@ -356,6 +374,8 @@ class Results(SimpleClass):
                     kpt = torch.cat((kpts[j].xyn, kpts[j].conf[..., None]), 2) if kpts[j].has_visible else kpts[j].xyn
                     line += (*kpt.reshape(-1).tolist(),)
                 line += (conf,) * save_conf + (() if id is None else (id,))
+                if extra_vars is not None:
+                    line += (*extra_vars[j], )
                 texts.append(("%g " * len(line)).rstrip() % line)
 
         if texts:
@@ -428,29 +448,6 @@ class Results(SimpleClass):
         import json
 
         return json.dumps(self.summary(normalize=normalize, decimals=decimals), indent=2)
-
-
-class RegressionResults(Results):
-    """
-    Extends `Results` with an additional attribute `extra_vars`
-    containing predicted values of extra variables for each detected object.
-    """
-
-    def __init__(self, orig_img, path, names, boxes=None, masks=None, probs=None, keypoints=None, obb=None, extra_vars=None):
-        """Initialize the RegressionResults class."""
-        super().__init__(orig_img, path, names, boxes, masks, probs, keypoints, obb)
-        self.extra_vars = extra_vars
-        self._keys = "boxes", "masks", "probs", "keypoints", "obb", "extra_vars"
-
-    def update(self, boxes=None, masks=None, probs=None, extra_vars=None):
-        """Update the boxes, masks, probs, and extra_vars of the RegressionResults object."""
-        super().update(boxes, masks, probs) 
-        if extra_vars is not None:
-            self.extra_vars = extra_vars
-
-    def new(self):
-        """Return a new RegressionResults object with the same image, path, and names."""
-        return RegressionResults(orig_img=self.orig_img, path=self.path, names=self.names)
 
 
 class Boxes(BaseTensor):

@@ -1,6 +1,6 @@
 from ultralytics.models.yolo.detect.predict import DetectionPredictor
 from ultralytics.models.yolo.segment.predict import SegmentationPredictor
-from ultralytics.engine.results import RegressionResults
+from ultralytics.engine.results import Results
 from ultralytics.utils import ops
 
 
@@ -32,7 +32,7 @@ class RegressionDetectionPredictor(DetectionPredictor):
                 pred[:, :4] = ops.scale_boxes(img.shape[2:], pred[:, :4], orig_img.shape)
                 extra_vars = pred[:, -num_vars:]
             results.append(
-                RegressionResults(
+                Results(
                     orig_img,
                     path=img_path,
                     names=self.model.names,
@@ -79,7 +79,7 @@ class RegressionSegmentationPredictor(SegmentationPredictor):
                     pred[:, :4] = ops.scale_boxes(img.shape[2:], pred[:, :4], orig_img.shape)
                 extra_vars = pred[:, -num_vars:]
             results.append(
-                RegressionResults(
+                Results(
                     orig_img,
                     path=img_path,
                     names=self.model.names,

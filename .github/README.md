@@ -60,7 +60,7 @@ where
 ## Example code
 ```python
 # import
-from ultralytics.models import RegressionModel
+from ultralytics import RegressionModel
 
 # training a detection model
 model = RegressionModel('yolov8s-det-regression.yaml')
@@ -73,4 +73,25 @@ results = model.train(data='dataset.yaml', epochs=100)
 # loading + evaluating on test set
 model = RegressionModel('saved_model.pt')
 metrics = model.val(split='test')
+```
+
+## CLI
+### Training
+Detection
+```
+yolo train model=yolov8s-det-regression.yaml data=dataset.yaml epochs=100
+```
+Segmentation
+```
+yolo train model=yolov8s-seg-regression.yaml data=dataset.yaml epochs=100
+```
+
+### Validation
+```
+yolo val model=saved_model.pt data=dataset.yaml
+```
+
+### Inference
+```
+yolo predict model=saved_model.pt source=image.jpg
 ```

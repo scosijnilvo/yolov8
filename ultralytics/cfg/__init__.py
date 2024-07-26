@@ -4,6 +4,7 @@ import contextlib
 import shutil
 import subprocess
 import sys
+import torch
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Dict, List, Union
@@ -537,7 +538,15 @@ def entrypoint(debug=""):
         LOGGER.warning(f"WARNING ⚠️ 'model' argument is missing. Using default 'model={model}'.")
     overrides["model"] = model
     stem = Path(model).stem.lower()
-    if "rtdetr" in stem:  # guess architecture
+    ckpt = torch.load(model, map_location="meta")
+    model_name = ckpt["model"].__class__.__name__.lower()
+    if "regression" in model_name:
+        from ultralytics import RegressionModel
+
+        if task is None:
+            task = "segment" if "segmentation" in model_name else "detect"
+        model = RegressionModel(model, task)
+    elif "rtdetr" in stem:  # guess architecture
         from ultralytics import RTDETR
 
         model = RTDETR(model)  # no task argument
