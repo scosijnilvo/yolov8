@@ -7,6 +7,7 @@ from ultralytics.utils.metrics import box_iou
 from ultralytics.utils.metrics import RegressionSegmentMetrics, RegressionDetMetrics
 from ultralytics.utils.plotting import output_to_target, plot_images
 from ultralytics.data.build import build_custom_dataset
+from pathlib import Path
 
 
 class RegressionValidator():
@@ -152,12 +153,30 @@ class RegressionDetectionValidator(RegressionValidator, DetectionValidator):
             # Save
             if self.args.save_json:
                 self.pred_to_json(predn, batch["im_file"][si])
+            if self.args.save_txt:
+                self.save_one_txt(
+                    predn,
+                    self.args.save_conf,
+                    pbatch["ori_shape"],
+                    self.save_dir / "labels" / f'{Path(batch["im_file"][si]).stem}.txt',
+                )
+
+    def save_one_txt(self, predn, save_conf, shape, file):
+        from ultralytics.engine.results import Results
+
+        Results(
+            np.zeros((shape[0], shape[1]), dtype=np.uint8),
+            path=None,
+            names=self.names,
+            boxes=predn[:, :6],
+            extra_vars=predn[:, -self.num_vars:]
+        ).save_txt(file, save_conf=save_conf)
 
     def pred_to_json(self, predn, filename):
         """Serialize predictions to json."""
         super().pred_to_json(predn, filename)
         for i, p in enumerate(predn):
-            self.jdict[i]["extra_vars"] = p[:, -self.num_vars:]
+            self.jdict[i]["extra_vars"] = p[-self.num_vars:].tolist()
 
     def get_desc(self):
         """Return a formatted description of evaluation metrics."""
@@ -294,12 +313,32 @@ class RegressionSegmentationValidator(RegressionValidator, SegmentationValidator
                     ratio_pad=batch["ratio_pad"][si],
                 )
                 self.pred_to_json(predn, batch["im_file"][si], pred_masks)
+            if self.args.save_txt:
+                self.save_one_txt(
+                    predn,
+                    pred_masks,
+                    self.args.save_conf,
+                    pbatch["ori_shape"],
+                    self.save_dir / "labels" / f'{Path(batch["im_file"][si]).stem}.txt',
+                )
+
+    def save_one_txt(self, predn, pred_masks, save_conf, shape, file):
+        from ultralytics.engine.results import Results
+
+        Results(
+            np.zeros((shape[0], shape[1]), dtype=np.uint8),
+            path=None,
+            names=self.names,
+            boxes=predn[:, :6],
+            masks=pred_masks,
+            extra_vars=predn[:, -self.num_vars:]
+        ).save_txt(file, save_conf=save_conf)
 
     def pred_to_json(self, predn, filename, pred_masks):
         """Serialize predictions to json."""
         super().pred_to_json(predn, filename, pred_masks)
         for i, p in enumerate(predn):
-            self.jdict[i]["extra_vars"] = p[:, -self.num_vars:]
+            self.jdict[i]["extra_vars"] = p[-self.num_vars:].tolist()
 
     def get_desc(self):
         """Return a formatted description of evaluation metrics."""
