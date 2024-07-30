@@ -537,14 +537,17 @@ def entrypoint(debug=""):
         model = "yolov8n.pt"
         LOGGER.warning(f"WARNING ⚠️ 'model' argument is missing. Using default 'model={model}'.")
     overrides["model"] = model
-    stem = Path(model).stem.lower()
-    ckpt = torch.load(model, map_location="meta")
-    model_name = ckpt["model"].__class__.__name__.lower()
+    path = Path(model)
+    stem = path.stem.lower()
+    model_name = stem
+    if path.suffix.lower() == ".pt":
+        ckpt = torch.load(model, map_location="meta")
+        model_name = ckpt["model"].__class__.__name__.lower()
     if "regression" in model_name:
         from ultralytics import RegressionModel
 
         if task is None:
-            task = "segment" if "segmentation" in model_name else "detect"
+            task = "segment" if "segmentation" in model_name or "-seg" in model_name else "detect"
         model = RegressionModel(model, task)
     elif "rtdetr" in stem:  # guess architecture
         from ultralytics import RTDETR
