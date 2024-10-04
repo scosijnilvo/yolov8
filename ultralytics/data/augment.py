@@ -1296,8 +1296,47 @@ class CustomFormat(Format):
 
     def __call__(self, labels):
         """Return formatted labels to be used by `collate_fn`."""
-        nl = len(labels["instances"])
+        img = labels.pop("img")
+        h, w = img.shape[:2]
+        cls = labels.pop("cls")
         extra_vars = labels.pop("extra_vars")
-        new_labels = super().__call__(labels)
-        new_labels["extra_vars"] = torch.from_numpy(extra_vars) if nl else torch.zeros((nl, self.num_vars))
-        return new_labels
+        instances = labels.pop("instances")
+        instances.convert_bbox(format=self.bbox_format)
+        instances.denormalize(w, h)
+        nl = len(instances)
+        if self.return_mask:
+            if nl:
+                masks, instances, cls, extra_vars = self._format_segments(instances, cls, extra_vars, w, h)
+                masks = torch.from_numpy(masks)
+            else:
+                masks = torch.zeros(
+                    1 if self.mask_overlap else nl, img.shape[0] // self.mask_ratio, img.shape[1] // self.mask_ratio
+                )
+            labels["masks"] = masks
+        if self.normalize:
+            instances.normalize(w, h)
+        labels["img"] = self._format_img(img)
+        labels["cls"] = torch.from_numpy(cls) if nl else torch.zeros(nl)
+        labels["extra_vars"] = torch.from_numpy(extra_vars) if nl else torch.zeros((nl, self.num_vars))
+        labels["bboxes"] = torch.from_numpy(instances.bboxes) if nl else torch.zeros((nl, 4))
+        if self.return_keypoint:
+            labels["keypoints"] = torch.from_numpy(instances.keypoints)
+        if self.return_obb:
+            labels["bboxes"] = (
+                xyxyxyxy2xywhr(torch.from_numpy(instances.segments)) if len(instances.segments) else torch.zeros((0, 5))
+            )
+        if self.batch_idx:
+            labels["batch_idx"] = torch.zeros(nl)
+        return labels
+
+    def _format_segments(self, instances, cls, extra_vars, w, h):
+        segments = instances.segments
+        if self.mask_overlap:
+            masks, sorted_idx = polygons2masks_overlap((h, w), segments, downsample_ratio=self.mask_ratio)
+            masks = masks[None]
+            instances = instances[sorted_idx]
+            cls = cls[sorted_idx]
+            extra_vars = extra_vars[sorted_idx]
+        else:
+            masks = polygons2masks((h, w), segments, color=1, downsample_ratio=self.mask_ratio)
+        return masks, instances, cls, extra_vars
